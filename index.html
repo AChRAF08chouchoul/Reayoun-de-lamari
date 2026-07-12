@@ -185,7 +185,22 @@
 <div id="modal-root"></div>
 <div class="toast" id="toast"></div>
 
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
+const firebaseConfig = {
+  apiKey: "AIzaSyBoazDRPLvecSX-I1usog5-U6ib6LL10cI",
+  authDomain: "royaume-de-la-mriee.firebaseapp.com",
+  projectId: "royaume-de-la-mriee",
+  storageBucket: "royaume-de-la-mriee.firebasestorage.app",
+  messagingSenderId: "1010586121552",
+  appId: "1:1010586121552:web:aa3f8401fa50465656e855",
+  measurementId: "G-6L0TM7BCYN"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const APP_DOC = db.collection('app').doc('main');
+
 const COLORS = {
   'أحمر': '#C0392B', 'أزرق':'#2E5C8A', 'أخضر':'#3F6B4A', 'ذهبي':'#B8935A',
   'وردي':'#D98BA6', 'أبيض':'#E8E2D6', 'أسود':'#2B2320', 'بنفسجي':'#7D5A8C'
@@ -193,21 +208,39 @@ const COLORS = {
 
 let state = { dresses: [], bookings: [], tab: 'dashboard', loaded:false, dressSearch:'', dressStatusFilter:'all' };
 
-const hasClaudeStorage = typeof window.storage !== 'undefined';
+let __cloudCache = null;
+
+async function __loadCloudDoc(){
+  if(__cloudCache) return __cloudCache;
+  try{
+    const snap = await APP_DOC.get();
+    __cloudCache = snap.exists ? snap.data() : {};
+  }catch(e){
+    console.error('Firestore load error', e);
+    __cloudCache = {};
+  }
+  return __cloudCache;
+}
 
 async function storageGet(key){
-  if(hasClaudeStorage){
-    try{ return await window.storage.get(key, false); }catch(e){ return null; }
-  } else {
-    const v = localStorage.getItem(key);
-    return v ? { value: v } : null;
-  }
+  try{
+    const data = await __loadCloudDoc();
+    if(data && data[key] !== undefined && data[key] !== null){
+      return { value: data[key] };
+    }
+    return null;
+  }catch(e){ return null; }
 }
 async function storageSet(key, value){
-  if(hasClaudeStorage){
-    try{ return await window.storage.set(key, value, false); }catch(e){ return null; }
-  } else {
-    try{ localStorage.setItem(key, value); return { value }; }catch(e){ return null; }
+  try{
+    await APP_DOC.set({ [key]: value }, { merge: true });
+    const data = await __loadCloudDoc();
+    data[key] = value;
+    return { value };
+  }catch(e){
+    console.error('Firestore save error', e);
+    if(typeof showToast === 'function') showToast('تعذر الحفظ، تحقق من الاتصال بالإنترنت');
+    return null;
   }
 }
 
