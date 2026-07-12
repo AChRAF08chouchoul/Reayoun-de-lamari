@@ -310,12 +310,32 @@ function daysBetween(start, end){
   return Math.max(diff, 1);
 }
 
+function findBookingConflict(dressId, start, end, excludeBookingId){
+  if(!start || !end) return null;
+  return state.bookings.find(b =>
+    b.dressId === dressId &&
+    !b.returned &&
+    b.id !== excludeBookingId &&
+    start <= b.end && b.start <= end
+  ) || null;
+}
+
 function onBookingDressOrDateChange(form){
   const dressId = form.dress.value;
   const dress = state.dresses.find(d=>d.id===dressId);
   if(dress && form.start.value && form.end.value){
     const days = daysBetween(form.start.value, form.end.value);
     form.total.value = (dress.price * days).toFixed(2);
+  }
+  const msgEl = document.getElementById('conflictMsg');
+  if(!msgEl) return;
+  const conflict = findBookingConflict(dressId, form.start.value, form.end.value, form.dataset.editingId || null);
+  if(conflict){
+    msgEl.style.display = 'block';
+    msgEl.textContent = `⚠ هذا الفستان محجوز فعلا من ${conflict.start} إلى ${conflict.end} (الزبونة: ${conflict.customer}). اختر تواريخ أخرى أو فستانا آخر.`;
+  } else {
+    msgEl.style.display = 'none';
+    msgEl.textContent = '';
   }
 }
 
@@ -325,6 +345,12 @@ function addBooking(e){
   const dressId = f.dress.value;
   const dress = state.dresses.find(d=>d.id===dressId);
   if(!dress) return;
+  const start = f.start.value, end = f.end.value;
+  const conflict = findBookingConflict(dressId, start, end, null);
+  if(conflict){
+    alert(`لا يمكن الحجز: هذا الفستان محجوز فعلا من ${conflict.start} إلى ${conflict.end} (الزبونة: ${conflict.customer}). اختر تواريخ أخرى أو فستانا آخر.`);
+    return;
+  }
   const total = parseFloat(f.total.value) || 0;
   const paid = parseFloat(f.paid.value) || 0;
   const booking = {
@@ -334,8 +360,7 @@ function addBooking(e){
     dressCode: dress.code,
     customer: f.customer.value.trim(),
     phone: f.phone.value.trim(),
-    start: f.start.value,
-    end: f.end.value,
+    start, end,
     total, paid,
     returned: false
   };
@@ -354,7 +379,10 @@ function markReturned(id){
   if(!b) return;
   b.returned = true;
   const dress = state.dresses.find(d=>d.id===b.dressId);
-  if(dress) dress.status = 'cleaning';
+  if(dress){
+    const stillActive = state.bookings.some(x=>x.dressId===dress.id && !x.returned);
+    dress.status = stillActive ? 'rented' : 'cleaning';
+  }
   saveDresses(); saveBookings(); render();
 }
 function deleteBooking(id){ state.bookings = state.bookings.filter(b=>b.id!==id); saveBookings(); render(); }
@@ -508,8 +536,8 @@ function renderDresses(){
 }
 
 function renderBookings(){
-  const availableDresses = state.dresses.filter(d=>d.status==='available');
-  const dressOptions = availableDresses.map(d=>`<option value="${d.id}">${d.code} — ${d.name}</option>`).join('')
+  const bookableDresses = state.dresses.filter(d=>d.status!=='cleaning');
+  const dressOptions = bookableDresses.map(d=>`<option value="${d.id}">${d.code} — ${d.name} ${d.status==='rented' ? '(محجوز حاليا فترات أخرى)' : ''}</option>`).join('')
     || `<option disabled selected>لا توجد فساتين متوفرة</option>`;
 
   return `
@@ -524,6 +552,7 @@ function renderBookings(){
         <div><label>المبلغ الكلي</label><input name="total" type="number" min="0" step="0.01" placeholder="0"></div>
         <div><label>المبلغ المدفوع</label><input name="paid" type="number" min="0" step="0.01" placeholder="0"></div>
       </div>
+      <div id="conflictMsg" style="display:none; color:#a33; font-size:13px; margin-top:8px; font-weight:600;"></div>
       <div class="btn-row"><button class="btn btn-primary" type="submit">تسجيل الحجز وطباعة الوصل</button></div>
     </form>
 
