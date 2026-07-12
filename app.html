@@ -1,0 +1,1218 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Royaumede la mriée</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cairo:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #F7F1E8;
+    --burgundy: #6B2737;
+    --burgundy-dark: #4E1C29;
+    --gold: #B8935A;
+    --blush: #E8C4C4;
+    --ink: #2B2320;
+    --ink-soft: #6b5f57;
+    --sage: #7C9473;
+    --amber: #C08A3E;
+    --dusty-blue: #7C93A8;
+    --card: #FFFFFF;
+    --line: #E4D9C8;
+    --radius: 14px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Cairo', sans-serif;
+    min-height:100vh;
+  }
+  h1,h2,h3, .display{ font-family:'Amiri', serif; }
+  .topbar{
+    background: linear-gradient(135deg, var(--burgundy) 0%, var(--burgundy-dark) 100%);
+    color: #F7F1E8;
+    padding: 28px 24px 40px;
+    position: relative;
+  }
+  .topbar h1{ font-size: 30px; margin: 0 0 4px; font-weight: 700; }
+  .topbar p{ margin:0; color: var(--blush); font-size: 14px; letter-spacing: 0.5px; }
+  .scallop{
+    position:absolute; bottom:-1px; left:0; right:0; height:18px;
+    background: radial-gradient(circle at 9px 0, transparent 9px, var(--bg) 10px) 0 -9px / 18px 18px repeat-x;
+  }
+  .nav{
+    display:flex; gap:8px; padding: 16px 20px 0;
+    max-width: 960px; margin: 0 auto; overflow-x:auto;
+  }
+  .nav button{
+    border:none; background: transparent; color: var(--ink-soft);
+    font-family:'Cairo'; font-size:15px; font-weight:600;
+    padding:10px 18px; border-radius: 999px; cursor:pointer;
+    white-space:nowrap; transition: all .15s ease;
+  }
+  .nav button.active{ background: var(--burgundy); color: #fff; }
+  .nav button:not(.active):hover{ background: var(--blush); color: var(--burgundy-dark); }
+  main{ max-width: 960px; margin: 0 auto; padding: 20px 20px 80px; }
+  .stats{
+    display:grid; grid-template-columns: repeat(auto-fit, minmax(140px,1fr));
+    gap:12px; margin-bottom: 22px;
+  }
+  .stat-card{ background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; }
+  .stat-card .num{ font-family:'Amiri'; font-size: 28px; color: var(--burgundy); font-weight:700; line-height:1; }
+  .stat-card .label{ font-size: 13px; color: var(--ink-soft); margin-top:6px; }
+  .stat-card.good .num{ color: var(--sage); }
+  .stat-card.warn .num{ color: #a33; }
+  .section-title{ display:flex; align-items:center; gap:10px; margin: 26px 0 12px; }
+  .section-title h2{ font-size:20px; margin:0; color:var(--burgundy-dark); }
+  .section-title .dash{ flex:1; height:1px; background: var(--line); }
+  .card{ background: var(--card); border:1px solid var(--line); border-radius: var(--radius); padding:18px; margin-bottom:14px; }
+  .form-grid{ display:grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr)); gap:12px; }
+  label{ font-size:12px; color: var(--ink-soft); display:block; margin-bottom:4px; }
+  input, select{
+    width:100%; padding:10px 12px; border-radius:9px; border:1px solid var(--line);
+    font-family:'Cairo'; font-size:14px; background: #FCFAF6; color:var(--ink);
+  }
+  input:focus, select:focus{ outline: 2px solid var(--gold); outline-offset:1px; }
+  .btn{
+    border:none; border-radius:9px; padding:11px 20px; font-family:'Cairo';
+    font-weight:700; font-size:14px; cursor:pointer; transition: transform .1s ease, opacity .15s;
+  }
+  .btn:active{ transform: scale(0.97); }
+  .btn-primary{ background: var(--burgundy); color:#fff; }
+  .btn-primary:hover{ background: var(--burgundy-dark); }
+  .btn-ghost{ background: transparent; color: var(--burgundy); border:1px solid var(--burgundy); }
+  .btn-gold{ background: var(--gold); color:#fff; }
+  .btn-danger{ background: transparent; color:#a33; border:1px solid #d8b0b0; font-weight:600; font-size:13px; padding:7px 12px;}
+  .btn-row{ margin-top:14px; display:flex; gap:10px; flex-wrap:wrap; }
+  .dress-grid{ display:grid; grid-template-columns: repeat(auto-fill, minmax(220px,1fr)); gap:14px; }
+  .dress-card{ background: var(--card); border:1px solid var(--line); border-radius: var(--radius); overflow:hidden; }
+  .swatch{ height: 160px; display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden; cursor:pointer; }
+  .swatch img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .swatch .no-photo{ font-size:12px; color:#fff; opacity:.75; }
+  .photo-preview{ width:56px; height:56px; border-radius:10px; object-fit:cover; border:1px solid var(--line); display:none; margin-top:6px; }
+  .dress-lightbox{ position:fixed; inset:0; background:rgba(20,10,10,.85); display:none; align-items:center; justify-content:center; z-index:999; padding:24px; }
+  .dress-lightbox.open{ display:flex; }
+  .dress-lightbox img{ max-width:100%; max-height:100%; border-radius:12px; }
+  .code-tag{
+    position:absolute; top:8px; left:8px; background:rgba(255,255,255,.85);
+    color: var(--burgundy-dark); font-size:11px; font-weight:700; padding:2px 8px; border-radius:6px;
+    letter-spacing: 0.5px;
+  }
+  .dress-body{ padding:14px; }
+  .dress-body h3{ margin:0 0 4px; font-size:17px; color: var(--burgundy-dark); }
+  .meta{ font-size:13px; color: var(--ink-soft); margin:2px 0; }
+  .badge{ display:inline-block; font-size:12px; font-weight:700; padding:3px 12px; border-radius:999px; margin-top:8px; }
+  .badge.available{ background:#E7EEE3; color: var(--sage); }
+  .badge.rented{ background:#F4E7D3; color: var(--amber); }
+  .badge.cleaning{ background:#E4EBF1; color: var(--dusty-blue); }
+  .dress-actions{ display:flex; justify-content:space-between; align-items:center; margin-top:12px; gap:6px; flex-wrap:wrap;}
+  .booking-row{
+    display:flex; justify-content:space-between; align-items:flex-start;
+    padding:14px 0; border-bottom: 1px solid var(--line); gap: 10px; flex-wrap: wrap;
+  }
+  .booking-row:last-child{ border-bottom:none; }
+  .booking-info b{ color: var(--burgundy-dark); }
+  .booking-dates{ font-size:13px; color: var(--ink-soft); }
+  .money-line{ font-size:13px; margin-top:4px; }
+  .money-line span{ margin-left:12px; }
+  .paid{ color: var(--sage); font-weight:700; }
+  .due{ color:#a33; font-weight:700; }
+  .empty{ text-align:center; color: var(--ink-soft); padding: 40px 20px; font-size:14px; }
+  .empty .display{ font-size:22px; color: var(--burgundy); display:block; margin-bottom:6px;}
+  table{ width:100%; border-collapse: collapse; font-size:13px; }
+  th, td{ text-align:right; padding:8px 6px; border-bottom:1px solid var(--line); }
+  th{ color: var(--ink-soft); font-weight:600; }
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(43,35,32,.55);
+    display:flex; align-items:center; justify-content:center; z-index:50; padding:20px;
+  }
+  .modal{
+    background:#fff; border-radius:var(--radius); max-width:360px; width:100%;
+    padding:22px; box-shadow: 0 20px 50px rgba(0,0,0,.25);
+  }
+  .receipt-box{
+    background:#FCFAF6; border:1px dashed var(--line); border-radius:10px;
+    padding:16px; font-size:13.5px; line-height:1.9; white-space:pre-wrap;
+    font-family: 'Cairo'; color: var(--ink);
+  }
+  .toast{
+    position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
+    background: var(--burgundy-dark); color:#fff; padding:10px 20px;
+    border-radius:999px; font-size:13px; z-index:60; opacity:0; transition:opacity .25s;
+  }
+  .toast.show{ opacity:1; }
+  body.dark{
+    --bg:#1E1815; --card:#2A2220; --ink:#EDE6DD; --ink-soft:#B8AA9E;
+    --line:#4A3F38; --burgundy:#8A3B4E; --burgundy-dark:#6B2737;
+  }
+  body.dark .swatch{ background:#3a302b; }
+  body.dark input, body.dark select{ background:#241D1A; color:var(--ink); border-color:var(--line); }
+  body.dark .no-photo{ color:#ddd; }
+  .filter-bar{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
+  .filter-bar input, .filter-bar select{ flex:1; min-width:140px; }
+  .backup-actions{ display:flex; gap:10px; flex-wrap:wrap; }
+</style>
+</head>
+<body>
+<div id="lock-screen"></div>
+
+<div class="topbar">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+    <div>
+      <h1 class="display">💐 Royaumede la mriée</h1>
+      <p>إدارة المخزون والحجوزات لمحلك</p>
+    </div>
+    <div style="display:flex; gap:8px;">
+      <button onclick="lockNow()" style="background:rgba(255,255,255,.15); border:none; color:#fff; padding:8px 12px; border-radius:8px; font-size:13px; cursor:pointer; font-family:'Cairo';">🔒 قفل</button>
+      <button onclick="toggleNotifications()" id="notifBtn" title="تفعيل/إيقاف تنبيهات الإرجاع والخروج" style="background:rgba(255,255,255,.15); border:none; color:#fff; padding:8px 12px; border-radius:8px; font-size:13px; cursor:pointer; font-family:'Cairo';">🔕</button>
+      <button onclick="toggleDarkMode()" id="darkModeBtn" style="background:rgba(255,255,255,.15); border:none; color:#fff; padding:8px 12px; border-radius:8px; font-size:13px; cursor:pointer; font-family:'Cairo';">🌙</button>
+    </div>
+  </div>
+  <div class="scallop"></div>
+</div>
+
+<div class="nav">
+  <button class="active" data-tab="dashboard">لوحة التحكم</button>
+  <button data-tab="dresses">الفساتين</button>
+  <button data-tab="bookings">الحجوزات</button>
+  <button data-tab="reports">التقارير</button>
+</div>
+
+<main id="app"></main>
+<div class="dress-lightbox" id="dressLightbox" onclick="closeLightbox()"><img id="dressLightboxImg" src=""></div>
+<div id="modal-root"></div>
+<div class="toast" id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyBoazDRPLvecSX-I1usog5-U6ib6LL10cI",
+  authDomain: "royaume-de-la-mriee.firebaseapp.com",
+  projectId: "royaume-de-la-mriee",
+  storageBucket: "royaume-de-la-mriee.firebasestorage.app",
+  messagingSenderId: "1010586121552",
+  appId: "1:1010586121552:web:aa3f8401fa50465656e855",
+  measurementId: "G-6L0TM7BCYN"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const DRESSES_COL = db.collection('dresses');
+const BOOKINGS_COL = db.collection('bookings');
+const SETTINGS_DOC = db.collection('settings').doc('app');
+
+const COLORS = {
+  'أحمر': '#C0392B', 'أزرق':'#2E5C8A', 'أخضر':'#3F6B4A', 'ذهبي':'#B8935A',
+  'وردي':'#D98BA6', 'أبيض':'#E8E2D6', 'أسود':'#2B2320', 'بنفسجي':'#7D5A8C'
+};
+
+let state = { dresses: [], bookings: [], tab: 'dashboard', loaded:false, dressSearch:'', dressStatusFilter:'all', bookingSearch:'', bookingStatusFilter:'all' };
+
+let __settingsCache = null;
+
+async function __loadSettingsDoc(){
+  if(__settingsCache) return __settingsCache;
+  try{
+    const snap = await SETTINGS_DOC.get();
+    __settingsCache = snap.exists ? snap.data() : {};
+  }catch(e){
+    console.error('Firestore settings load error', e);
+    __settingsCache = {};
+  }
+  return __settingsCache;
+}
+
+async function storageGet(key){
+  try{
+    const data = await __loadSettingsDoc();
+    if(data && data[key] !== undefined && data[key] !== null){
+      return { value: data[key] };
+    }
+    return null;
+  }catch(e){ return null; }
+}
+async function storageSet(key, value){
+  try{
+    await SETTINGS_DOC.set({ [key]: value }, { merge: true });
+    const data = await __loadSettingsDoc();
+    data[key] = value;
+    return { value };
+  }catch(e){
+    console.error('Firestore settings save error', e);
+    if(typeof showToast === 'function') showToast('تعذر الحفظ، تحقق من الاتصال بالإنترنت');
+    return null;
+  }
+}
+
+async function loadData(){
+  try{
+    const snap = await DRESSES_COL.get();
+    state.dresses = snap.docs.map(d=>d.data());
+  }catch(e){ console.error('load dresses error', e); state.dresses = []; }
+  try{
+    const snap = await BOOKINGS_COL.get();
+    state.bookings = snap.docs.map(d=>d.data());
+  }catch(e){ console.error('load bookings error', e); state.bookings = []; }
+  state.loaded = true;
+}
+
+async function saveDressToCloud(dress){
+  try{ await DRESSES_COL.doc(dress.id).set(dress); }
+  catch(e){ console.error('save dress error', e); showToast('تعذر حفظ الفستان، تحقق من الاتصال'); }
+}
+async function deleteDressFromCloud(id){
+  try{ await DRESSES_COL.doc(id).delete(); }
+  catch(e){ console.error('delete dress error', e); showToast('تعذر حذف الفستان'); }
+}
+async function saveBookingToCloud(booking){
+  try{ await BOOKINGS_COL.doc(booking.id).set(booking); }
+  catch(e){ console.error('save booking error', e); showToast('تعذر حفظ الحجز، تحقق من الاتصال'); }
+}
+async function deleteBookingFromCloud(id){
+  try{ await BOOKINGS_COL.doc(id).delete(); }
+  catch(e){ console.error('delete booking error', e); showToast('تعذر حذف الحجز'); }
+}
+
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+
+function nextDressCode(){
+  let max = 0;
+  state.dresses.forEach(d=>{
+    const m = /FS-(\d+)/.exec(d.code||'');
+    if(m) max = Math.max(max, parseInt(m[1],10));
+  });
+  return 'FS-' + String(max+1).padStart(3,'0');
+}
+
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=> t.classList.remove('show'), 2200);
+}
+
+async function toggleDarkMode(){
+  const isDark = document.body.classList.toggle('dark');
+  document.getElementById('darkModeBtn').textContent = isDark ? '☀️' : '🌙';
+  await storageSet('dark_mode', isDark ? 'true' : 'false');
+}
+async function applySavedDarkMode(){
+  const saved = await storageGet('dark_mode');
+  if(saved && saved.value === 'true'){
+    document.body.classList.add('dark');
+    document.getElementById('darkModeBtn').textContent = '☀️';
+  }
+}
+
+function switchTab(tab){
+  state.tab = tab;
+  document.querySelectorAll('.nav button').forEach(b=> b.classList.toggle('active', b.dataset.tab === tab));
+  render();
+}
+document.querySelectorAll('.nav button').forEach(b=> b.addEventListener('click', ()=> switchTab(b.dataset.tab)));
+
+function resizeImageFile(file, maxDim, quality){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = (ev)=>{
+      const img = new Image();
+      img.onload = ()=>{
+        let { width, height } = img;
+        if(width > height && width > maxDim){ height = Math.round(height * maxDim / width); width = maxDim; }
+        else if(height > maxDim){ width = Math.round(width * maxDim / height); height = maxDim; }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = reject;
+      img.src = ev.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function previewDressImage(e){
+  const file = e.target.files[0];
+  const preview = document.getElementById('dressImgPreview');
+  if(!file){ preview.style.display='none'; return; }
+  resizeImageFile(file, 300, 0.7).then(dataUrl=>{
+    preview.src = dataUrl;
+    preview.style.display = 'inline-block';
+  });
+}
+
+function openLightbox(id){
+  const d = state.dresses.find(d=>d.id===id);
+  if(!d || !d.image) return;
+  document.getElementById('dressLightboxImg').src = d.image;
+  document.getElementById('dressLightbox').classList.add('open');
+}
+function closeLightbox(){ document.getElementById('dressLightbox').classList.remove('open'); }
+
+async function addDress(e){
+  e.preventDefault();
+  const f = e.target;
+  const dress = {
+    id: uid(),
+    code: nextDressCode(),
+    name: f.name.value.trim(),
+    size: f.size.value,
+    color: f.color.value,
+    price: parseFloat(f.price.value) || 0,
+    status: 'available',
+    image: null
+  };
+  if(!dress.name) return;
+  const file = f.image && f.image.files[0];
+  if(file){
+    try{ dress.image = await resizeImageFile(file, 700, 0.75); }
+    catch(e){ dress.image = null; }
+  }
+  state.dresses.unshift(dress);
+  await saveDressToCloud(dress);
+  f.reset();
+  document.getElementById('dressImgPreview').style.display='none';
+  render();
+}
+async function deleteDress(id){
+  if(!confirm('متأكد من حذف هاد الفستان؟ هاد العملية ما ترجعش.')) return;
+  state.dresses = state.dresses.filter(d=>d.id!==id);
+  render();
+  await deleteDressFromCloud(id);
+}
+async function setDressStatus(id, status){
+  const d = state.dresses.find(d=>d.id===id);
+  if(d){ d.status = status; render(); await saveDressToCloud(d); }
+}
+
+function openEditDress(id){
+  const d = state.dresses.find(d=>d.id===id);
+  if(!d) return;
+  const options = Object.keys(COLORS).map(c=>`<option value="${c}" ${d.color===c?'selected':''}>${c}</option>`).join('');
+  const root = document.getElementById('modal-root');
+  root.innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this) closeModal()">
+      <div class="modal">
+        <div class="section-title" style="margin-top:0;"><h2 class="display">تعديل الفستان</h2></div>
+        <form onsubmit="saveDressEdit(event, '${d.id}')">
+          <div class="form-grid">
+            <div><label>اسم الفستان</label><input name="name" value="${d.name.replace(/"/g,'&quot;')}" required></div>
+            <div><label>المقاس</label><input name="size" value="${d.size||''}"></div>
+            <div><label>اللون</label><select name="color">${options}</select></div>
+            <div><label>سعر الكراء (يوم)</label><input name="price" type="number" min="0" step="0.01" value="${d.price}"></div>
+            <div>
+              <label>تغيير الصورة (اختياري)</label>
+              <input name="image" type="file" accept="image/*">
+              ${d.image ? `<img src="${d.image}" class="photo-preview" style="display:inline-block;">` : ''}
+            </div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" type="submit">حفظ التعديلات</button>
+            <button class="btn btn-ghost" type="button" onclick="closeModal()">إلغاء</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+}
+
+async function saveDressEdit(e, id){
+  e.preventDefault();
+  const f = e.target;
+  const d = state.dresses.find(d=>d.id===id);
+  if(!d) return;
+  d.name = f.name.value.trim() || d.name;
+  d.size = f.size.value;
+  d.color = f.color.value;
+  d.price = parseFloat(f.price.value) || 0;
+  const file = f.image && f.image.files[0];
+  if(file){
+    try{ d.image = await resizeImageFile(file, 700, 0.75); }
+    catch(e){ /* keep old image on failure */ }
+  }
+  await saveDressToCloud(d);
+  closeModal();
+  showToast('تم حفظ التعديلات ✓');
+  render();
+}
+
+function daysBetween(start, end){
+  const s = new Date(start), e = new Date(end);
+  const diff = Math.round((e-s)/(1000*60*60*24));
+  return Math.max(diff, 1);
+}
+
+function findBookingConflict(dressId, start, end, excludeBookingId){
+  if(!start || !end) return null;
+  return state.bookings.find(b =>
+    b.dressId === dressId &&
+    !b.returned &&
+    b.id !== excludeBookingId &&
+    start <= b.end && b.start <= end
+  ) || null;
+}
+
+function onBookingDressOrDateChange(form){
+  const dressId = form.dress.value;
+  const dress = state.dresses.find(d=>d.id===dressId);
+  if(dress && form.start.value && form.end.value){
+    const days = daysBetween(form.start.value, form.end.value);
+    form.total.value = (dress.price * days).toFixed(2);
+  }
+  const msgEl = document.getElementById('conflictMsg');
+  if(!msgEl) return;
+  const conflict = findBookingConflict(dressId, form.start.value, form.end.value, form.dataset.editingId || null);
+  if(conflict){
+    msgEl.style.display = 'block';
+    msgEl.textContent = `⚠ هذا الفستان محجوز فعلا من ${conflict.start} إلى ${conflict.end} (الزبونة: ${conflict.customer}). اختر تواريخ أخرى أو فستانا آخر.`;
+  } else {
+    msgEl.style.display = 'none';
+    msgEl.textContent = '';
+  }
+}
+
+async function addBooking(e){
+  e.preventDefault();
+  const f = e.target;
+  const dressId = f.dress.value;
+  const dress = state.dresses.find(d=>d.id===dressId);
+  if(!dress) return;
+  const start = f.start.value, end = f.end.value;
+  if(start && end && end < start){
+    alert('تاريخ النهاية يجب أن يكون بعد تاريخ البداية أو مساويا له');
+    return;
+  }
+  const conflict = findBookingConflict(dressId, start, end, null);
+  if(conflict){
+    alert(`لا يمكن الحجز: هذا الفستان محجوز فعلا من ${conflict.start} إلى ${conflict.end} (الزبونة: ${conflict.customer}). اختر تواريخ أخرى أو فستانا آخر.`);
+    return;
+  }
+  const total = parseFloat(f.total.value) || 0;
+  const paid = parseFloat(f.paid.value) || 0;
+  const booking = {
+    id: uid(),
+    dressId,
+    dressName: dress.name,
+    dressCode: dress.code,
+    customer: f.customer.value.trim(),
+    phone: f.phone.value.trim(),
+    start, end,
+    total, paid,
+    returned: false
+  };
+  if(!booking.customer || !booking.start || !booking.end) return;
+  state.bookings.unshift(booking);
+  dress.status = 'rented';
+  await saveBookingToCloud(booking);
+  await saveDressToCloud(dress);
+  f.reset();
+  render();
+  openReceipt(booking.id);
+}
+
+async function markReturned(id){
+  const b = state.bookings.find(b=>b.id===id);
+  if(!b) return;
+  b.returned = true;
+  const dress = state.dresses.find(d=>d.id===b.dressId);
+  if(dress){
+    const stillActive = state.bookings.some(x=>x.dressId===dress.id && !x.returned);
+    dress.status = stillActive ? 'rented' : 'cleaning';
+  }
+  render();
+  await saveBookingToCloud(b);
+  if(dress) await saveDressToCloud(dress);
+}
+async function deleteBooking(id){
+  if(!confirm('متأكد من حذف هاد الحجز؟ هاد العملية ما ترجعش.')) return;
+  state.bookings = state.bookings.filter(b=>b.id!==id);
+  render();
+  await deleteBookingFromCloud(id);
+}
+
+async function updatePayment(id, value){
+  const b = state.bookings.find(b=>b.id===id);
+  if(!b) return;
+  b.paid = Math.max(0, parseFloat(value)||0);
+  render();
+  await saveBookingToCloud(b);
+}
+
+function statusLabel(status){ return {available:'متوفر', rented:'مكرى', cleaning:'فالتنظيف'}[status] || status; }
+
+function daysUntil(dateStr){
+  const today = new Date(); today.setHours(0,0,0,0);
+  const d = new Date(dateStr); d.setHours(0,0,0,0);
+  return Math.round((d-today)/(1000*60*60*24));
+}
+
+function relativeDayLabel(diff){
+  if(diff === 0) return 'اليوم';
+  if(diff === 1) return 'غدا';
+  if(diff === 2) return 'بعد غد';
+  if(diff < 0) return `متأخر ${Math.abs(diff)} يوم`;
+  return `بعد ${diff} أيام`;
+}
+
+const ALERT_WINDOW_DAYS = 2;
+
+function computeAlerts(){
+  const overdue = [], dueSoon = [], pickupSoon = [];
+  state.bookings.forEach(b=>{
+    if(!b.returned){
+      const endDiff = daysUntil(b.end);
+      if(endDiff < 0) overdue.push({...b, diff:endDiff});
+      else if(endDiff <= ALERT_WINDOW_DAYS) dueSoon.push({...b, diff:endDiff});
+      const startDiff = daysUntil(b.start);
+      if(startDiff >= 0 && startDiff <= ALERT_WINDOW_DAYS) pickupSoon.push({...b, diff:startDiff});
+    }
+  });
+  overdue.sort((a,b)=> a.diff-b.diff);
+  dueSoon.sort((a,b)=> a.diff-b.diff);
+  pickupSoon.sort((a,b)=> a.diff-b.diff);
+  return { overdue, dueSoon, pickupSoon };
+}
+
+function bookingUrgencyBadge(b){
+  if(b.returned) return '';
+  const diff = daysUntil(b.end);
+  if(diff < 0) return `<span style="color:#a33; font-weight:700; font-size:12px; margin-inline-start:8px;">⛔ متأخر ${Math.abs(diff)} يوم</span>`;
+  if(diff <= ALERT_WINDOW_DAYS) return `<span style="color:var(--amber); font-weight:700; font-size:12px; margin-inline-start:8px;">⏰ ${relativeDayLabel(diff)}</span>`;
+  return '';
+}
+
+function renderAlertsSection(){
+  const { overdue, dueSoon, pickupSoon } = computeAlerts();
+  if(!overdue.length && !dueSoon.length && !pickupSoon.length) return '';
+  return `
+    <div class="section-title"><h2 class="display">🔔 تنبيهات</h2><div class="dash"></div></div>
+    <div class="card" style="border-color:#d8b0b0;">
+      ${overdue.length ? `<div style="margin-bottom:14px;">
+        <div style="font-weight:700; color:#a33; margin-bottom:6px;">⛔ متأخرة فالإرجاع (${overdue.length})</div>
+        ${overdue.map(b=>`
+          <div class="booking-row">
+            <div class="booking-info">
+              <b>${b.customer}</b> — ${b.dressName} <span style="color:var(--ink-soft); font-size:12px;">(${b.dressCode})</span>
+              <div class="booking-dates">كان يرجع: ${b.end} · <span class="due">${relativeDayLabel(b.diff)}</span> ${b.phone ? '· '+b.phone : ''}</div>
+            </div>
+            <button class="btn btn-ghost" onclick="markReturned('${b.id}')">تم الإرجاع</button>
+          </div>`).join('')}
+      </div>` : ''}
+      ${dueSoon.length ? `<div style="margin-bottom:14px;">
+        <div style="font-weight:700; color:var(--amber); margin-bottom:6px;">⏰ قريب الإرجاع (${dueSoon.length})</div>
+        ${dueSoon.map(b=>`
+          <div class="booking-row">
+            <div class="booking-info">
+              <b>${b.customer}</b> — ${b.dressName} <span style="color:var(--ink-soft); font-size:12px;">(${b.dressCode})</span>
+              <div class="booking-dates">يرجع: ${b.end} · ${relativeDayLabel(b.diff)} ${b.phone ? '· '+b.phone : ''}</div>
+            </div>
+            <button class="btn btn-ghost" onclick="markReturned('${b.id}')">تم الإرجاع</button>
+          </div>`).join('')}
+      </div>` : ''}
+      ${pickupSoon.length ? `<div>
+        <div style="font-weight:700; color:var(--dusty-blue); margin-bottom:6px;">📦 قريب الخروج (${pickupSoon.length})</div>
+        ${pickupSoon.map(b=>`
+          <div class="booking-row">
+            <div class="booking-info">
+              <b>${b.customer}</b> — ${b.dressName} <span style="color:var(--ink-soft); font-size:12px;">(${b.dressCode})</span>
+              <div class="booking-dates">يخرج: ${b.start} · ${relativeDayLabel(b.diff)} ${b.phone ? '· '+b.phone : ''}</div>
+            </div>
+            <button class="btn btn-gold" onclick="openReceipt('${b.id}')">الوصل</button>
+          </div>`).join('')}
+      </div>` : ''}
+    </div>
+  `;
+}
+
+async function toggleNotifications(){
+  if(!('Notification' in window)){
+    showToast('المتصفح لا يدعم الإشعارات');
+    return;
+  }
+  if(Notification.permission !== 'granted'){
+    const perm = await Notification.requestPermission();
+    if(perm !== 'granted'){
+      showToast('يجب السماح بالإشعارات من إعدادات المتصفح');
+      return;
+    }
+  }
+  const current = await storageGet('notifications_enabled');
+  const newVal = !(current && current.value === 'true');
+  await storageSet('notifications_enabled', newVal ? 'true' : 'false');
+  updateNotifBtnUI(newVal);
+  showToast(newVal ? 'تم تفعيل تنبيهات الإرجاع والخروج ✓' : 'تم إيقاف الإشعارات');
+  if(newVal) checkAndNotify(true);
+}
+
+function updateNotifBtnUI(enabled){
+  const btn = document.getElementById('notifBtn');
+  if(btn) btn.textContent = enabled ? '🔔' : '🔕';
+}
+
+async function applySavedNotifSetting(){
+  if(!('Notification' in window)) return;
+  const saved = await storageGet('notifications_enabled');
+  const enabled = !!(saved && saved.value === 'true' && Notification.permission === 'granted');
+  updateNotifBtnUI(enabled);
+}
+
+async function checkAndNotify(force){
+  if(!('Notification' in window)) return;
+  if(Notification.permission !== 'granted') return;
+  const enabledSetting = await storageGet('notifications_enabled');
+  if(!enabledSetting || enabledSetting.value !== 'true') return;
+  const { overdue, dueSoon, pickupSoon } = computeAlerts();
+  const total = overdue.length + dueSoon.length + pickupSoon.length;
+  if(total === 0) return;
+  if(!force){
+    const todayStr = new Date().toISOString().slice(0,10);
+    const last = await storageGet('last_notified_date');
+    if(last && last.value === todayStr) return;
+    await storageSet('last_notified_date', todayStr);
+  }
+  const parts = [];
+  if(overdue.length) parts.push(`${overdue.length} حجز متأخر فالإرجاع`);
+  if(dueSoon.length) parts.push(`${dueSoon.length} حجز قريب الإرجاع`);
+  if(pickupSoon.length) parts.push(`${pickupSoon.length} حجز قريب الخروج`);
+  try{
+    new Notification('Royaumede la mriée 🔔', { body: parts.join(' · ') });
+  }catch(e){ console.error('notification error', e); }
+}
+
+function buildReceiptText(b){
+  const remaining = (b.total - b.paid).toFixed(2);
+  return `———————————————
+      Royaumede la mriée
+———————————————
+الزبونة: ${b.customer}
+${b.phone ? 'الهاتف: '+b.phone+'\n' : ''}الفستان: ${b.dressName} (${b.dressCode})
+من: ${b.start}   إلى: ${b.end}
+———————————————
+المبلغ الكلي: ${b.total.toFixed(2)} دج
+المدفوع: ${b.paid.toFixed(2)} دج
+المتبقي: ${remaining} دج
+———————————————
+شكرا لثقتكم`;
+}
+
+function openReceipt(bookingId){
+  const b = state.bookings.find(x=>x.id===bookingId);
+  if(!b) return;
+  const text = buildReceiptText(b);
+  const root = document.getElementById('modal-root');
+  const waLink = b.phone ? `https://wa.me/${normalizePhone(b.phone)}?text=${encodeURIComponent(text)}` : null;
+  root.innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this) closeModal()">
+      <div class="modal">
+        <div class="section-title" style="margin-top:0;"><h2 class="display">وصل الزبون</h2></div>
+        <div class="receipt-box" id="receipt-text">${text}</div>
+        <div class="btn-row">
+          <button class="btn btn-gold" onclick="copyReceipt()">نسخ الوصل</button>
+          <button class="btn btn-ghost" onclick="printReceipt()">🖨 طباعة</button>
+          ${ waLink ? `<a class="btn" style="background:#25D366; color:#fff;" href="${waLink}" target="_blank" rel="noopener">إرسال عبر واتساب</a>` : `<button class="btn" style="background:#ccc; color:#666;" disabled title="أضف رقم الهاتف فحجز هاد الزبونة">إرسال عبر واتساب</button>` }
+          <button class="btn btn-ghost" onclick="closeModal()">إغلاق</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+function normalizePhone(phone){
+  let p = phone.replace(/[^0-9+]/g,'');
+  if(p.startsWith('+')) return p.slice(1);
+  if(p.startsWith('0')) return '212' + p.slice(1);
+  return p;
+}
+function closeModal(){ document.getElementById('modal-root').innerHTML = ''; }
+
+function copyReceipt(){
+  const text = document.getElementById('receipt-text').innerText;
+  const finish = ()=> showToast('تم نسخ الوصل ✓');
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(finish).catch(()=> fallbackCopy(text, finish));
+  } else {
+    fallbackCopy(text, finish);
+  }
+}
+function fallbackCopy(text, cb){
+  try{
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    cb();
+  }catch(e){ showToast('تعذر النسخ، انسخ يدويا'); }
+}
+
+function printReceipt(){
+  const text = document.getElementById('receipt-text').innerText;
+  const win = window.open('', '_blank', 'width=380,height=600');
+  if(!win){ showToast('يرجى السماح بالنوافذ المنبثقة للطباعة'); return; }
+  win.document.write(`
+    <html dir="rtl"><head><title>وصل الزبون</title>
+    <style>
+      body{ font-family: 'Courier New', monospace; padding:20px; direction:rtl; white-space:pre-wrap; font-size:14px; line-height:1.8; }
+    </style></head>
+    <body onload="window.print(); window.close();">${text.replace(/</g,'&lt;')}</body></html>
+  `);
+  win.document.close();
+}
+
+function renderDashboard(){
+  const total = state.dresses.length;
+  const rented = state.dresses.filter(d=>d.status==='rented').length;
+  const available = state.dresses.filter(d=>d.status==='available').length;
+  const activeBookings = state.bookings.filter(b=>!b.returned);
+  const unpaidBookings = state.bookings.filter(b=> (b.total - b.paid) > 0);
+  const totalUnpaid = unpaidBookings.reduce((s,b)=> s + (b.total-b.paid), 0);
+
+  return `
+    ${renderAlertsSection()}
+    <div class="stats">
+      <div class="stat-card"><div class="num">${total}</div><div class="label">مجموع الفساتين</div></div>
+      <div class="stat-card"><div class="num">${available}</div><div class="label">متوفرة الآن</div></div>
+      <div class="stat-card"><div class="num">${rented}</div><div class="label">مكراة حاليا</div></div>
+      <div class="stat-card"><div class="num">${activeBookings.length}</div><div class="label">حجوزات نشطة</div></div>
+    </div>
+    ${ totalUnpaid > 0 ? `
+    <div class="section-title"><h2 class="display">⚠ مبالغ متبقية غير مدفوعة</h2><div class="dash"></div></div>
+    <div class="card" style="border-color:#d8b0b0;">
+      <div style="font-size:22px; font-weight:700; color:#a33; margin-bottom:10px;">${totalUnpaid.toFixed(2)} دج إجمالا</div>
+      ${unpaidBookings.map(b=>`
+        <div class="booking-row">
+          <div class="booking-info">
+            <b>${b.customer}</b> — ${b.dressName} <span style="color:var(--ink-soft); font-size:12px;">(${b.dressCode})</span>
+            <div class="money-line"><span class="due">متبقي: ${(b.total-b.paid).toFixed(2)} دج</span></div>
+          </div>
+          <button class="btn btn-gold" onclick="openReceipt('${b.id}')">الوصل</button>
+        </div>
+      `).join('')}
+    </div>` : ''}
+    <div class="section-title"><h2 class="display">حجوزات لم ترجع بعد</h2><div class="dash"></div></div>
+    <div class="card">
+      ${ activeBookings.length ? activeBookings.map(b=>`
+        <div class="booking-row">
+          <div class="booking-info">
+            <b>${b.customer}</b> — ${b.dressName} <span style="color:var(--ink-soft); font-size:12px;">(${b.dressCode})</span>
+            <div class="booking-dates">${b.start} إلى ${b.end} ${b.phone ? '· '+b.phone : ''}${bookingUrgencyBadge(b)}</div>
+            <div class="money-line"><span class="paid">مدفوع: ${b.paid.toFixed(2)}</span><span class="due">متبقي: ${(b.total-b.paid).toFixed(2)}</span></div>
+          </div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="btn btn-gold" onclick="openReceipt('${b.id}')">الوصل</button>
+            <button class="btn btn-ghost" onclick="markReturned('${b.id}')">تم الإرجاع</button>
+          </div>
+        </div>
+      `).join('') : `<div class="empty"><span class="display">لا توجد حجوزات نشطة</span>كل الفساتين إما متوفرة أو فالتنظيف</div>` }
+    </div>
+  `;
+}
+
+function updateDressFilter(){
+  state.dressSearch = document.getElementById('dressSearchInput').value.trim().toLowerCase();
+  state.dressStatusFilter = document.getElementById('dressStatusFilter').value;
+  renderDressList();
+}
+
+function getFilteredDresses(){
+  return state.dresses.filter(d=>{
+    const matchesStatus = state.dressStatusFilter === 'all' || d.status === state.dressStatusFilter;
+    const q = state.dressSearch;
+    const matchesSearch = !q ||
+      (d.name && d.name.toLowerCase().includes(q)) ||
+      (d.code && d.code.toLowerCase().includes(q)) ||
+      (d.color && d.color.toLowerCase().includes(q)) ||
+      (d.size && String(d.size).toLowerCase().includes(q));
+    return matchesStatus && matchesSearch;
+  });
+}
+
+function dressListHTML(){
+  const list = getFilteredDresses();
+  if(!state.dresses.length){
+    return `<div class="card empty"><span class="display">المخزون فارغ</span>ابدأ بإضافة أول فستان فالأعلى</div>`;
+  }
+  if(!list.length){
+    return `<div class="card empty"><span class="display">لا توجد نتائج</span>جرب كلمة بحث أو فلتر آخر</div>`;
+  }
+  return `<div class="dress-grid">
+      ${list.map(d=>`
+        <div class="dress-card">
+          <div class="swatch" style="background:${COLORS[d.color]||'#ddd'}" ${d.image?`onclick="openLightbox('${d.id}')"`:''}>
+            ${d.image ? `<img src="${d.image}" alt="${d.name}">` : `<span class="no-photo">لا توجد صورة</span>`}
+            <span class="code-tag">${d.code}</span>
+          </div>
+          <div class="dress-body">
+            <h3>${d.name}</h3>
+            <div class="meta">المقاس: ${d.size || '—'}</div>
+            <div class="meta">السعر: ${d.price} / يوم</div>
+            <span class="badge ${d.status}">${statusLabel(d.status)}</span>
+            <div class="dress-actions">
+              <select onchange="setDressStatus('${d.id}', this.value)" style="width:auto; padding:6px 8px; font-size:12px;">
+                <option value="available" ${d.status==='available'?'selected':''}>متوفر</option>
+                <option value="rented" ${d.status==='rented'?'selected':''}>مكرى</option>
+                <option value="cleaning" ${d.status==='cleaning'?'selected':''}>فالتنظيف</option>
+              </select>
+              <button class="btn btn-ghost" style="padding:6px 10px; font-size:12px;" onclick="openEditDress('${d.id}')">تعديل</button>
+              <button class="btn-danger" onclick="deleteDress('${d.id}')">حذف</button>
+            </div>
+          </div>
+        </div>
+      `).join('')}
+    </div>`;
+}
+
+function renderDressList(){
+  const wrap = document.getElementById('dressListWrap');
+  if(wrap) wrap.innerHTML = dressListHTML();
+}
+
+function renderDresses(){
+  const options = Object.keys(COLORS).map(c=>`<option value="${c}">${c}</option>`).join('');
+  return `
+    <div class="section-title"><h2 class="display">إضافة فستان جديد</h2><div class="dash"></div></div>
+    <form class="card" onsubmit="addDress(event)">
+      <div class="form-grid">
+        <div><label>اسم الفستان</label><input name="name" placeholder="مثال: فستان سهرة أحمر" required></div>
+        <div><label>المقاس</label><input name="size" placeholder="مثال: 40" ></div>
+        <div><label>اللون</label><select name="color">${options}</select></div>
+        <div><label>سعر الكراء (يوم)</label><input name="price" type="number" min="0" step="0.01" placeholder="200"></div>
+        <div>
+          <label>صورة الفستان</label>
+          <input name="image" type="file" accept="image/*" onchange="previewDressImage(event)">
+          <img id="dressImgPreview" class="photo-preview">
+        </div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" type="submit">إضافة الفستان</button></div>
+    </form>
+
+    <div class="section-title"><h2 class="display">المخزون</h2><div class="dash"></div></div>
+    <div class="filter-bar">
+      <input id="dressSearchInput" type="text" placeholder="🔍 بحث بالاسم، الكود، اللون، أو المقاس" value="${state.dressSearch}" oninput="updateDressFilter()">
+      <select id="dressStatusFilter" onchange="updateDressFilter()">
+        <option value="all" ${state.dressStatusFilter==='all'?'selected':''}>كل الحالات</option>
+        <option value="available" ${state.dressStatusFilter==='available'?'selected':''}>متوفر</option>
+        <option value="rented" ${state.dressStatusFilter==='rented'?'selected':''}>مكرى</option>
+        <option value="cleaning" ${state.dressStatusFilter==='cleaning'?'selected':''}>فالتنظيف</option>
+      </select>
+    </div>
+    <div id="dressListWrap">${dressListHTML()}</div>
+  `;
+}
+
+function updateBookingFilter(){
+  state.bookingSearch = document.getElementById('bookingSearchInput').value.trim().toLowerCase();
+  state.bookingStatusFilter = document.getElementById('bookingStatusFilter').value;
+  renderBookingList();
+}
+
+function getFilteredBookings(){
+  return state.bookings.filter(b=>{
+    const matchesStatus = state.bookingStatusFilter === 'all'
+      || (state.bookingStatusFilter === 'active' && !b.returned)
+      || (state.bookingStatusFilter === 'returned' && b.returned)
+      || (state.bookingStatusFilter === 'unpaid' && (b.total - b.paid) > 0);
+    const q = state.bookingSearch;
+    const matchesSearch = !q ||
+      (b.customer && b.customer.toLowerCase().includes(q)) ||
+      (b.dressName && b.dressName.toLowerCase().includes(q)) ||
+      (b.dressCode && b.dressCode.toLowerCase().includes(q)) ||
+      (b.phone && b.phone.toLowerCase().includes(q)) ||
+      (b.start && b.start.includes(q)) ||
+      (b.end && b.end.includes(q));
+    return matchesStatus && matchesSearch;
+  });
+}
+
+function bookingListHTML(){
+  const list = getFilteredBookings();
+  if(!state.bookings.length){
+    return `<div class="empty"><span class="display">لا توجد حجوزات بعد</span>سجل أول حجز فالأعلى</div>`;
+  }
+  if(!list.length){
+    return `<div class="empty"><span class="display">لا توجد نتائج</span>جرب كلمة بحث أو فلتر آخر</div>`;
+  }
+  return list.map(b=>`
+    <div class="booking-row">
+      <div class="booking-info">
+        <b>${b.customer}</b> — ${b.dressName} <span style="color:var(--ink-soft); font-size:12px;">(${b.dressCode})</span>
+        <div class="booking-dates">${b.start} إلى ${b.end} ${b.phone ? '· '+b.phone : ''} ${b.returned ? '· <span style="color:var(--sage)">تم الإرجاع</span>' : ''}${bookingUrgencyBadge(b)}</div>
+        <div class="money-line">
+          الكلي: ${b.total.toFixed(2)} ·
+          <span class="paid">مدفوع: ${b.paid.toFixed(2)}</span>
+          <span class="due">متبقي: ${(b.total-b.paid).toFixed(2)}</span>
+        </div>
+        ${ (b.total-b.paid) > 0 ? `<div style="margin-top:6px; display:flex; gap:6px; align-items:center;">
+            <input type="number" min="0" step="0.01" placeholder="تحديث المدفوع" style="width:140px; padding:6px 8px; font-size:12px;" onkeydown="if(event.key==='Enter'){ updatePayment('${b.id}', this.value); }">
+            <span style="font-size:11px; color:var(--ink-soft);">اضغط Enter للتحديث</span>
+          </div>` : '' }
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn btn-gold" onclick="openReceipt('${b.id}')">الوصل</button>
+        ${!b.returned ? `<button class="btn btn-ghost" onclick="markReturned('${b.id}')">تم الإرجاع</button>` : ''}
+        <button class="btn-danger" onclick="deleteBooking('${b.id}')">حذف</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderBookingList(){
+  const wrap = document.getElementById('bookingListWrap');
+  if(wrap) wrap.innerHTML = bookingListHTML();
+}
+
+function renderBookings(){
+  const bookableDresses = state.dresses.filter(d=>d.status!=='cleaning');
+  const dressOptions = bookableDresses.map(d=>`<option value="${d.id}">${d.code} — ${d.name} ${d.status==='rented' ? '(محجوز حاليا فترات أخرى)' : ''}</option>`).join('')
+    || `<option disabled selected>لا توجد فساتين متوفرة</option>`;
+
+  return `
+    <div class="section-title"><h2 class="display">حجز جديد</h2><div class="dash"></div></div>
+    <form class="card" onsubmit="addBooking(event)" oninput="onBookingDressOrDateChange(this)">
+      <div class="form-grid">
+        <div><label>الفستان</label><select name="dress" required>${dressOptions}</select></div>
+        <div><label>اسم الزبونة</label><input name="customer" required></div>
+        <div><label>رقم الهاتف</label><input name="phone"></div>
+        <div><label>تاريخ البداية</label><input name="start" type="date" required></div>
+        <div><label>تاريخ النهاية</label><input name="end" type="date" required></div>
+        <div><label>المبلغ الكلي</label><input name="total" type="number" min="0" step="0.01" placeholder="0"></div>
+        <div><label>المبلغ المدفوع</label><input name="paid" type="number" min="0" step="0.01" placeholder="0"></div>
+      </div>
+      <div id="conflictMsg" style="display:none; color:#a33; font-size:13px; margin-top:8px; font-weight:600;"></div>
+      <div class="btn-row"><button class="btn btn-primary" type="submit">تسجيل الحجز وطباعة الوصل</button></div>
+    </form>
+
+    <div class="section-title"><h2 class="display">كل الحجوزات</h2><div class="dash"></div></div>
+    <div class="filter-bar">
+      <input id="bookingSearchInput" type="text" placeholder="🔍 بحث بالزبونة، الفستان، الكود، الهاتف، أو التاريخ" value="${state.bookingSearch}" oninput="updateBookingFilter()">
+      <select id="bookingStatusFilter" onchange="updateBookingFilter()">
+        <option value="all" ${state.bookingStatusFilter==='all'?'selected':''}>كل الحجوزات</option>
+        <option value="active" ${state.bookingStatusFilter==='active'?'selected':''}>نشطة (لم ترجع)</option>
+        <option value="returned" ${state.bookingStatusFilter==='returned'?'selected':''}>تم إرجاعها</option>
+        <option value="unpaid" ${state.bookingStatusFilter==='unpaid'?'selected':''}>فيها مبلغ متبقي</option>
+      </select>
+    </div>
+    <div class="card" id="bookingListWrap">${bookingListHTML()}</div>
+  `;
+}
+
+function renderReports(){
+  const totalRevenueAgreed = state.bookings.reduce((s,b)=> s + b.total, 0);
+  const totalPaid = state.bookings.reduce((s,b)=> s + b.paid, 0);
+  const totalDue = totalRevenueAgreed - totalPaid;
+  const now = new Date();
+  const thisMonth = state.bookings.filter(b=>{
+    const d = new Date(b.start);
+    return d.getMonth()===now.getMonth() && d.getFullYear()===now.getFullYear();
+  });
+  const monthPaid = thisMonth.reduce((s,b)=> s + b.paid, 0);
+
+  const rows = state.bookings.slice().sort((a,b)=> (a.start<b.start?1:-1)).map(b=>`
+    <tr>
+      <td>${b.dressCode}</td>
+      <td>${b.customer}</td>
+      <td>${b.start}</td>
+      <td>${b.total.toFixed(2)}</td>
+      <td class="paid">${b.paid.toFixed(2)}</td>
+      <td class="due">${(b.total-b.paid).toFixed(2)}</td>
+    </tr>
+  `).join('');
+
+  return `
+    <div class="stats">
+      <div class="stat-card good"><div class="num">${totalPaid.toFixed(0)}</div><div class="label">مجموع المدفوع (دج)</div></div>
+      <div class="stat-card warn"><div class="num">${totalDue.toFixed(0)}</div><div class="label">مجموع المتبقي (دج)</div></div>
+      <div class="stat-card"><div class="num">${totalRevenueAgreed.toFixed(0)}</div><div class="label">مجموع الاتفاقات (دج)</div></div>
+      <div class="stat-card"><div class="num">${monthPaid.toFixed(0)}</div><div class="label">مدفوع هذا الشهر</div></div>
+    </div>
+    <div class="section-title"><h2 class="display">تفاصيل الحجوزات</h2><div class="dash"></div></div>
+    <div class="card">
+      ${ state.bookings.length ? `<table>
+        <thead><tr><th>كود</th><th>الزبونة</th><th>البداية</th><th>الكلي</th><th>مدفوع</th><th>متبقي</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>` : `<div class="empty"><span class="display">لا توجد بيانات بعد</span>سجل حجوزات باش تبان هنا التقارير</div>` }
+    </div>
+
+    <div class="section-title"><h2 class="display">نسخة احتياطية</h2><div class="dash"></div></div>
+    <div class="card">
+      <p style="font-size:13px; color:var(--ink-soft); margin-top:0;">حمل نسخة من كل بياناتك (الفساتين والحجوزات) كملف، أو استرجع نسخة سابقة.</p>
+      <div class="backup-actions">
+        <button class="btn btn-gold" onclick="exportBackup()">⬇ تصدير نسخة احتياطية</button>
+        <button class="btn btn-ghost" onclick="document.getElementById('importBackupInput').click()">⬆ استيراد نسخة احتياطية</button>
+        <input type="file" id="importBackupInput" accept="application/json" style="display:none;" onchange="importBackup(event)">
+      </div>
+    </div>
+  `;
+}
+
+function render(){
+  const app = document.getElementById('app');
+  if(!state.loaded){ app.innerHTML = `<div class="empty">جاري التحميل...</div>`; return; }
+  if(state.tab === 'dashboard') app.innerHTML = renderDashboard();
+  else if(state.tab === 'dresses') app.innerHTML = renderDresses();
+  else if(state.tab === 'bookings') app.innerHTML = renderBookings();
+  else app.innerHTML = renderReports();
+}
+
+function exportBackup(){
+  const backup = {
+    exportedAt: new Date().toISOString(),
+    dresses: state.dresses,
+    bookings: state.bookings
+  };
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const dateStr = new Date().toISOString().slice(0,10);
+  a.href = url;
+  a.download = `نسخة-احتياطية-${dateStr}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('تم تصدير النسخة الاحتياطية ✓');
+}
+
+function importBackup(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = async (ev)=>{
+    try{
+      const data = JSON.parse(ev.target.result);
+      if(!Array.isArray(data.dresses) || !Array.isArray(data.bookings)){
+        showToast('ملف غير صالح');
+        return;
+      }
+      if(!confirm('هذا سيستبدل كل البيانات الحالية بالنسخة المستوردة. متأكد؟')) return;
+      showToast('جاري الاستيراد...');
+      const oldDressIds = state.dresses.map(d=>d.id);
+      const oldBookingIds = state.bookings.map(b=>b.id);
+      state.dresses = data.dresses;
+      state.bookings = data.bookings;
+      const batchSize = 400;
+      const allWrites = [
+        ...oldDressIds.map(id=>({col:DRESSES_COL, id, del:true})),
+        ...oldBookingIds.map(id=>({col:BOOKINGS_COL, id, del:true})),
+        ...state.dresses.map(d=>({col:DRESSES_COL, id:d.id, data:d})),
+        ...state.bookings.map(b=>({col:BOOKINGS_COL, id:b.id, data:b}))
+      ];
+      for(let i=0; i<allWrites.length; i+=batchSize){
+        const batch = db.batch();
+        allWrites.slice(i, i+batchSize).forEach(w=>{
+          const ref = w.col.doc(w.id);
+          if(w.del) batch.delete(ref); else batch.set(ref, w.data);
+        });
+        await batch.commit();
+      }
+      showToast('تم استيراد النسخة الاحتياطية ✓');
+      render();
+    }catch(err){
+      console.error(err);
+      showToast('تعذر قراءة الملف أو الاستيراد');
+    }
+    e.target.value = '';
+  };
+  reader.readAsText(file);
+}
+
+async function initApp(){
+  await loadData();
+  await applySavedDarkMode();
+  await applySavedNotifSetting();
+  checkAndNotify(false);
+  const pass = await storageGet('app_password');
+  if(pass && pass.value){
+    showLockScreen('login');
+  } else {
+    showLockScreen('setup');
+  }
+}
+
+function showLockScreen(mode){
+  const root = document.getElementById('lock-screen');
+  root.style.display = 'block';
+  if(mode === 'setup'){
+    root.innerHTML = `
+      <div class="modal-overlay" style="z-index:100;">
+        <div class="modal">
+          <div class="section-title" style="margin-top:0;"><h2 class="display">🔒 تعيين كلمة السر</h2></div>
+          <p style="font-size:13px; color:var(--ink-soft); margin-top:-6px;">هاد الكلمة غادي تلزمك باش تدخل للتطبيق فالمرات الجاية</p>
+          <form onsubmit="setupPassword(event)">
+            <div style="margin-bottom:10px;"><label>كلمة السر</label><input type="password" name="pw1" required minlength="4"></div>
+            <div><label>أكد كلمة السر</label><input type="password" name="pw2" required minlength="4"></div>
+            <div id="setup-error" style="color:#a33; font-size:13px; margin-top:8px;"></div>
+            <div class="btn-row"><button class="btn btn-primary" type="submit">حفظ وتشغيل التطبيق</button></div>
+          </form>
+        </div>
+      </div>
+    `;
+  } else {
+    root.innerHTML = `
+      <div class="modal-overlay" style="z-index:100;">
+        <div class="modal">
+          <div class="section-title" style="margin-top:0;"><h2 class="display">🔒 Royaumede la mriée</h2></div>
+          <p style="font-size:13px; color:var(--ink-soft); margin-top:-6px;">دخل كلمة السر باش توصل للتطبيق</p>
+          <form onsubmit="loginPassword(event)">
+            <input type="password" name="pw" required autofocus placeholder="كلمة السر">
+            <div id="login-error" style="color:#a33; font-size:13px; margin-top:8px;"></div>
+            <div class="btn-row"><button class="btn btn-primary" type="submit">دخول</button></div>
+          </form>
+        </div>
+      </div>
+    `;
+  }
+}
+
+async function hashPassword(pw){
+  const enc = new TextEncoder().encode(pw);
+  const hashBuf = await crypto.subtle.digest('SHA-256', enc);
+  return Array.from(new Uint8Array(hashBuf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+async function setupPassword(e){
+  e.preventDefault();
+  const f = e.target;
+  if(f.pw1.value !== f.pw2.value){
+    document.getElementById('setup-error').textContent = 'كلمتا السر غير متطابقتين';
+    return;
+  }
+  const hashed = await hashPassword(f.pw1.value);
+  await storageSet('app_password', hashed);
+  unlockApp();
+}
+
+async function loginPassword(e){
+  e.preventDefault();
+  const f = e.target;
+  const stored = await storageGet('app_password');
+  const hashed = await hashPassword(f.pw.value);
+  if(stored && stored.value === hashed){
+    unlockApp();
+  } else {
+    document.getElementById('login-error').textContent = 'كلمة السر غير صحيحة';
+  }
+}
+
+function unlockApp(){
+  const root = document.getElementById('lock-screen');
+  root.innerHTML = '';
+  root.style.display = 'none';
+  render();
+}
+
+function lockNow(){
+  showLockScreen('login');
+}
+
+initApp();
+</script>
+</body>
+</html>
