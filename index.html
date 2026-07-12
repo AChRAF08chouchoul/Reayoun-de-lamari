@@ -483,9 +483,9 @@ function buildReceiptText(b){
 ${b.phone ? 'الهاتف: '+b.phone+'\n' : ''}الفستان: ${b.dressName} (${b.dressCode})
 من: ${b.start}   إلى: ${b.end}
 ———————————————
-المبلغ الكلي: ${b.total.toFixed(2)} درهم
-المدفوع: ${b.paid.toFixed(2)} درهم
-المتبقي: ${remaining} درهم
+المبلغ الكلي: ${b.total.toFixed(2)} دج
+المدفوع: ${b.paid.toFixed(2)} دج
+المتبقي: ${remaining} دج
 ———————————————
 شكرا لثقتكم`;
 }
@@ -559,12 +559,12 @@ function renderDashboard(){
     ${ totalUnpaid > 0 ? `
     <div class="section-title"><h2 class="display">⚠ مبالغ متبقية غير مدفوعة</h2><div class="dash"></div></div>
     <div class="card" style="border-color:#d8b0b0;">
-      <div style="font-size:22px; font-weight:700; color:#a33; margin-bottom:10px;">${totalUnpaid.toFixed(2)} درهم إجمالا</div>
+      <div style="font-size:22px; font-weight:700; color:#a33; margin-bottom:10px;">${totalUnpaid.toFixed(2)} دج إجمالا</div>
       ${unpaidBookings.map(b=>`
         <div class="booking-row">
           <div class="booking-info">
             <b>${b.customer}</b> — ${b.dressName} <span style="color:var(--ink-soft); font-size:12px;">(${b.dressCode})</span>
-            <div class="money-line"><span class="due">متبقي: ${(b.total-b.paid).toFixed(2)} درهم</span></div>
+            <div class="money-line"><span class="due">متبقي: ${(b.total-b.paid).toFixed(2)} دج</span></div>
           </div>
           <button class="btn btn-gold" onclick="openReceipt('${b.id}')">الوصل</button>
         </div>
@@ -754,9 +754,9 @@ function renderReports(){
 
   return `
     <div class="stats">
-      <div class="stat-card good"><div class="num">${totalPaid.toFixed(0)}</div><div class="label">مجموع المدفوع (درهم)</div></div>
-      <div class="stat-card warn"><div class="num">${totalDue.toFixed(0)}</div><div class="label">مجموع المتبقي (درهم)</div></div>
-      <div class="stat-card"><div class="num">${totalRevenueAgreed.toFixed(0)}</div><div class="label">مجموع الاتفاقات (درهم)</div></div>
+      <div class="stat-card good"><div class="num">${totalPaid.toFixed(0)}</div><div class="label">مجموع المدفوع (دج)</div></div>
+      <div class="stat-card warn"><div class="num">${totalDue.toFixed(0)}</div><div class="label">مجموع المتبقي (دج)</div></div>
+      <div class="stat-card"><div class="num">${totalRevenueAgreed.toFixed(0)}</div><div class="label">مجموع الاتفاقات (دج)</div></div>
       <div class="stat-card"><div class="num">${monthPaid.toFixed(0)}</div><div class="label">مدفوع هذا الشهر</div></div>
     </div>
     <div class="section-title"><h2 class="display">تفاصيل الحجوزات</h2><div class="dash"></div></div>
