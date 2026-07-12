@@ -199,7 +199,9 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
-const APP_DOC = db.collection('app').doc('main');
+const DRESSES_COL = db.collection('dresses');
+const BOOKINGS_COL = db.collection('bookings');
+const SETTINGS_DOC = db.collection('settings').doc('app');
 
 const COLORS = {
   'أحمر': '#C0392B', 'أزرق':'#2E5C8A', 'أخضر':'#3F6B4A', 'ذهبي':'#B8935A',
@@ -208,23 +210,23 @@ const COLORS = {
 
 let state = { dresses: [], bookings: [], tab: 'dashboard', loaded:false, dressSearch:'', dressStatusFilter:'all' };
 
-let __cloudCache = null;
+let __settingsCache = null;
 
-async function __loadCloudDoc(){
-  if(__cloudCache) return __cloudCache;
+async function __loadSettingsDoc(){
+  if(__settingsCache) return __settingsCache;
   try{
-    const snap = await APP_DOC.get();
-    __cloudCache = snap.exists ? snap.data() : {};
+    const snap = await SETTINGS_DOC.get();
+    __settingsCache = snap.exists ? snap.data() : {};
   }catch(e){
-    console.error('Firestore load error', e);
-    __cloudCache = {};
+    console.error('Firestore settings load error', e);
+    __settingsCache = {};
   }
-  return __cloudCache;
+  return __settingsCache;
 }
 
 async function storageGet(key){
   try{
-    const data = await __loadCloudDoc();
+    const data = await __loadSettingsDoc();
     if(data && data[key] !== undefined && data[key] !== null){
       return { value: data[key] };
     }
@@ -233,26 +235,45 @@ async function storageGet(key){
 }
 async function storageSet(key, value){
   try{
-    await APP_DOC.set({ [key]: value }, { merge: true });
-    const data = await __loadCloudDoc();
+    await SETTINGS_DOC.set({ [key]: value }, { merge: true });
+    const data = await __loadSettingsDoc();
     data[key] = value;
     return { value };
   }catch(e){
-    console.error('Firestore save error', e);
+    console.error('Firestore settings save error', e);
     if(typeof showToast === 'function') showToast('تعذر الحفظ، تحقق من الاتصال بالإنترنت');
     return null;
   }
 }
 
 async function loadData(){
-  try{ const d = await storageGet('dresses'); state.dresses = d ? JSON.parse(d.value) : []; }
-  catch(e){ state.dresses = []; }
-  try{ const b = await storageGet('bookings'); state.bookings = b ? JSON.parse(b.value) : []; }
-  catch(e){ state.bookings = []; }
+  try{
+    const snap = await DRESSES_COL.get();
+    state.dresses = snap.docs.map(d=>d.data());
+  }catch(e){ console.error('load dresses error', e); state.dresses = []; }
+  try{
+    const snap = await BOOKINGS_COL.get();
+    state.bookings = snap.docs.map(d=>d.data());
+  }catch(e){ console.error('load bookings error', e); state.bookings = []; }
   state.loaded = true;
 }
-async function saveDresses(){ await storageSet('dresses', JSON.stringify(state.dresses)); }
-async function saveBookings(){ await storageSet('bookings', JSON.stringify(state.bookings)); }
+
+async function saveDressToCloud(dress){
+  try{ await DRESSES_COL.doc(dress.id).set(dress); }
+  catch(e){ console.error('save dress error', e); showToast('تعذر حفظ الفستان، تحقق من الاتصال'); }
+}
+async function deleteDressFromCloud(id){
+  try{ await DRESSES_COL.doc(id).delete(); }
+  catch(e){ console.error('delete dress error', e); showToast('تعذر حذف الفستان'); }
+}
+async function saveBookingToCloud(booking){
+  try{ await BOOKINGS_COL.doc(booking.id).set(booking); }
+  catch(e){ console.error('save booking error', e); showToast('تعذر حفظ الحجز، تحقق من الاتصال'); }
+}
+async function deleteBookingFromCloud(id){
+  try{ await BOOKINGS_COL.doc(id).delete(); }
+  catch(e){ console.error('delete booking error', e); showToast('تعذر حذف الحجز'); }
+}
 
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
 
@@ -352,15 +373,19 @@ async function addDress(e){
     catch(e){ dress.image = null; }
   }
   state.dresses.unshift(dress);
-  saveDresses();
+  await saveDressToCloud(dress);
   f.reset();
   document.getElementById('dressImgPreview').style.display='none';
   render();
 }
-function deleteDress(id){ state.dresses = state.dresses.filter(d=>d.id!==id); saveDresses(); render(); }
-function setDressStatus(id, status){
+async function deleteDress(id){
+  state.dresses = state.dresses.filter(d=>d.id!==id);
+  render();
+  await deleteDressFromCloud(id);
+}
+async function setDressStatus(id, status){
   const d = state.dresses.find(d=>d.id===id);
-  if(d){ d.status = status; saveDresses(); render(); }
+  if(d){ d.status = status; render(); await saveDressToCloud(d); }
 }
 
 function openEditDress(id){
@@ -408,7 +433,7 @@ async function saveDressEdit(e, id){
     try{ d.image = await resizeImageFile(file, 700, 0.75); }
     catch(e){ /* keep old image on failure */ }
   }
-  saveDresses();
+  await saveDressToCloud(d);
   closeModal();
   showToast('تم حفظ التعديلات ✓');
   render();
@@ -449,7 +474,7 @@ function onBookingDressOrDateChange(form){
   }
 }
 
-function addBooking(e){
+async function addBooking(e){
   e.preventDefault();
   const f = e.target;
   const dressId = f.dress.value;
@@ -477,14 +502,14 @@ function addBooking(e){
   if(!booking.customer || !booking.start || !booking.end) return;
   state.bookings.unshift(booking);
   dress.status = 'rented';
-  saveDresses();
-  saveBookings();
+  await saveBookingToCloud(booking);
+  await saveDressToCloud(dress);
   f.reset();
   render();
   openReceipt(booking.id);
 }
 
-function markReturned(id){
+async function markReturned(id){
   const b = state.bookings.find(b=>b.id===id);
   if(!b) return;
   b.returned = true;
@@ -493,16 +518,22 @@ function markReturned(id){
     const stillActive = state.bookings.some(x=>x.dressId===dress.id && !x.returned);
     dress.status = stillActive ? 'rented' : 'cleaning';
   }
-  saveDresses(); saveBookings(); render();
+  render();
+  await saveBookingToCloud(b);
+  if(dress) await saveDressToCloud(dress);
 }
-function deleteBooking(id){ state.bookings = state.bookings.filter(b=>b.id!==id); saveBookings(); render(); }
+async function deleteBooking(id){
+  state.bookings = state.bookings.filter(b=>b.id!==id);
+  render();
+  await deleteBookingFromCloud(id);
+}
 
-function updatePayment(id, value){
+async function updatePayment(id, value){
   const b = state.bookings.find(b=>b.id===id);
   if(!b) return;
   b.paid = Math.max(0, parseFloat(value)||0);
-  saveBookings();
   render();
+  await saveBookingToCloud(b);
 }
 
 function statusLabel(status){ return {available:'متوفر', rented:'مكرى', cleaning:'فالتنظيف'}[status] || status; }
@@ -852,14 +883,31 @@ function importBackup(e){
         return;
       }
       if(!confirm('هذا سيستبدل كل البيانات الحالية بالنسخة المستوردة. متأكد؟')) return;
+      showToast('جاري الاستيراد...');
+      const oldDressIds = state.dresses.map(d=>d.id);
+      const oldBookingIds = state.bookings.map(b=>b.id);
       state.dresses = data.dresses;
       state.bookings = data.bookings;
-      await saveDresses();
-      await saveBookings();
+      const batchSize = 400;
+      const allWrites = [
+        ...oldDressIds.map(id=>({col:DRESSES_COL, id, del:true})),
+        ...oldBookingIds.map(id=>({col:BOOKINGS_COL, id, del:true})),
+        ...state.dresses.map(d=>({col:DRESSES_COL, id:d.id, data:d})),
+        ...state.bookings.map(b=>({col:BOOKINGS_COL, id:b.id, data:b}))
+      ];
+      for(let i=0; i<allWrites.length; i+=batchSize){
+        const batch = db.batch();
+        allWrites.slice(i, i+batchSize).forEach(w=>{
+          const ref = w.col.doc(w.id);
+          if(w.del) batch.delete(ref); else batch.set(ref, w.data);
+        });
+        await batch.commit();
+      }
       showToast('تم استيراد النسخة الاحتياطية ✓');
       render();
     }catch(err){
-      showToast('تعذر قراءة الملف');
+      console.error(err);
+      showToast('تعذر قراءة الملف أو الاستيراد');
     }
     e.target.value = '';
   };
@@ -912,6 +960,12 @@ function showLockScreen(mode){
   }
 }
 
+async function hashPassword(pw){
+  const enc = new TextEncoder().encode(pw);
+  const hashBuf = await crypto.subtle.digest('SHA-256', enc);
+  return Array.from(new Uint8Array(hashBuf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
 async function setupPassword(e){
   e.preventDefault();
   const f = e.target;
@@ -919,7 +973,8 @@ async function setupPassword(e){
     document.getElementById('setup-error').textContent = 'كلمتا السر غير متطابقتين';
     return;
   }
-  await storageSet('app_password', f.pw1.value);
+  const hashed = await hashPassword(f.pw1.value);
+  await storageSet('app_password', hashed);
   unlockApp();
 }
 
@@ -927,7 +982,8 @@ async function loginPassword(e){
   e.preventDefault();
   const f = e.target;
   const stored = await storageGet('app_password');
-  if(stored && stored.value === f.pw.value){
+  const hashed = await hashPassword(f.pw.value);
+  if(stored && stored.value === hashed){
     unlockApp();
   } else {
     document.getElementById('login-error').textContent = 'كلمة السر غير صحيحة';
