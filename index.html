@@ -167,6 +167,7 @@
     </div>
     <div style="display:flex; gap:8px;">
       <button onclick="lockNow()" style="background:rgba(255,255,255,.15); border:none; color:#fff; padding:8px 12px; border-radius:8px; font-size:13px; cursor:pointer; font-family:'Cairo';">🔒 قفل</button>
+      <button onclick="toggleNotifications()" id="notifBtn" title="تفعيل/إيقاف تنبيهات الإرجاع والخروج" style="background:rgba(255,255,255,.15); border:none; color:#fff; padding:8px 12px; border-radius:8px; font-size:13px; cursor:pointer; font-family:'Cairo';">🔕</button>
       <button onclick="toggleDarkMode()" id="darkModeBtn" style="background:rgba(255,255,255,.15); border:none; color:#fff; padding:8px 12px; border-radius:8px; font-size:13px; cursor:pointer; font-family:'Cairo';">🌙</button>
     </div>
   </div>
@@ -208,7 +209,7 @@ const COLORS = {
   'وردي':'#D98BA6', 'أبيض':'#E8E2D6', 'أسود':'#2B2320', 'بنفسجي':'#7D5A8C'
 };
 
-let state = { dresses: [], bookings: [], tab: 'dashboard', loaded:false, dressSearch:'', dressStatusFilter:'all' };
+let state = { dresses: [], bookings: [], tab: 'dashboard', loaded:false, dressSearch:'', dressStatusFilter:'all', bookingSearch:'', bookingStatusFilter:'all' };
 
 let __settingsCache = null;
 
@@ -379,6 +380,7 @@ async function addDress(e){
   render();
 }
 async function deleteDress(id){
+  if(!confirm('متأكد من حذف هاد الفستان؟ هاد العملية ما ترجعش.')) return;
   state.dresses = state.dresses.filter(d=>d.id!==id);
   render();
   await deleteDressFromCloud(id);
@@ -481,6 +483,10 @@ async function addBooking(e){
   const dress = state.dresses.find(d=>d.id===dressId);
   if(!dress) return;
   const start = f.start.value, end = f.end.value;
+  if(start && end && end < start){
+    alert('تاريخ النهاية يجب أن يكون بعد تاريخ البداية أو مساويا له');
+    return;
+  }
   const conflict = findBookingConflict(dressId, start, end, null);
   if(conflict){
     alert(`لا يمكن الحجز: هذا الفستان محجوز فعلا من ${conflict.start} إلى ${conflict.end} (الزبونة: ${conflict.customer}). اختر تواريخ أخرى أو فستانا آخر.`);
@@ -523,6 +529,7 @@ async function markReturned(id){
   if(dress) await saveDressToCloud(dress);
 }
 async function deleteBooking(id){
+  if(!confirm('متأكد من حذف هاد الحجز؟ هاد العملية ما ترجعش.')) return;
   state.bookings = state.bookings.filter(b=>b.id!==id);
   render();
   await deleteBookingFromCloud(id);
@@ -537,6 +544,145 @@ async function updatePayment(id, value){
 }
 
 function statusLabel(status){ return {available:'متوفر', rented:'مكرى', cleaning:'فالتنظيف'}[status] || status; }
+
+function daysUntil(dateStr){
+  const today = new Date(); today.setHours(0,0,0,0);
+  const d = new Date(dateStr); d.setHours(0,0,0,0);
+  return Math.round((d-today)/(1000*60*60*24));
+}
+
+function relativeDayLabel(diff){
+  if(diff === 0) return 'اليوم';
+  if(diff === 1) return 'غدا';
+  if(diff === 2) return 'بعد غد';
+  if(diff < 0) return `متأخر ${Math.abs(diff)} يوم`;
+  return `بعد ${diff} أيام`;
+}
+
+const ALERT_WINDOW_DAYS = 2;
+
+function computeAlerts(){
+  const overdue = [], dueSoon = [], pickupSoon = [];
+  state.bookings.forEach(b=>{
+    if(!b.returned){
+      const endDiff = daysUntil(b.end);
+      if(endDiff < 0) overdue.push({...b, diff:endDiff});
+      else if(endDiff <= ALERT_WINDOW_DAYS) dueSoon.push({...b, diff:endDiff});
+      const startDiff = daysUntil(b.start);
+      if(startDiff >= 0 && startDiff <= ALERT_WINDOW_DAYS) pickupSoon.push({...b, diff:startDiff});
+    }
+  });
+  overdue.sort((a,b)=> a.diff-b.diff);
+  dueSoon.sort((a,b)=> a.diff-b.diff);
+  pickupSoon.sort((a,b)=> a.diff-b.diff);
+  return { overdue, dueSoon, pickupSoon };
+}
+
+function bookingUrgencyBadge(b){
+  if(b.returned) return '';
+  const diff = daysUntil(b.end);
+  if(diff < 0) return `<span style="color:#a33; font-weight:700; font-size:12px; margin-inline-start:8px;">⛔ متأخر ${Math.abs(diff)} يوم</span>`;
+  if(diff <= ALERT_WINDOW_DAYS) return `<span style="color:var(--amber); font-weight:700; font-size:12px; margin-inline-start:8px;">⏰ ${relativeDayLabel(diff)}</span>`;
+  return '';
+}
+
+function renderAlertsSection(){
+  const { overdue, dueSoon, pickupSoon } = computeAlerts();
+  if(!overdue.length && !dueSoon.length && !pickupSoon.length) return '';
+  return `
+    <div class="section-title"><h2 class="display">🔔 تنبيهات</h2><div class="dash"></div></div>
+    <div class="card" style="border-color:#d8b0b0;">
+      ${overdue.length ? `<div style="margin-bottom:14px;">
+        <div style="font-weight:700; color:#a33; margin-bottom:6px;">⛔ متأخرة فالإرجاع (${overdue.length})</div>
+        ${overdue.map(b=>`
+          <div class="booking-row">
+            <div class="booking-info">
+              <b>${b.customer}</b> — ${b.dressName} <span style="color:var(--ink-soft); font-size:12px;">(${b.dressCode})</span>
+              <div class="booking-dates">كان يرجع: ${b.end} · <span class="due">${relativeDayLabel(b.diff)}</span> ${b.phone ? '· '+b.phone : ''}</div>
+            </div>
+            <button class="btn btn-ghost" onclick="markReturned('${b.id}')">تم الإرجاع</button>
+          </div>`).join('')}
+      </div>` : ''}
+      ${dueSoon.length ? `<div style="margin-bottom:14px;">
+        <div style="font-weight:700; color:var(--amber); margin-bottom:6px;">⏰ قريب الإرجاع (${dueSoon.length})</div>
+        ${dueSoon.map(b=>`
+          <div class="booking-row">
+            <div class="booking-info">
+              <b>${b.customer}</b> — ${b.dressName} <span style="color:var(--ink-soft); font-size:12px;">(${b.dressCode})</span>
+              <div class="booking-dates">يرجع: ${b.end} · ${relativeDayLabel(b.diff)} ${b.phone ? '· '+b.phone : ''}</div>
+            </div>
+            <button class="btn btn-ghost" onclick="markReturned('${b.id}')">تم الإرجاع</button>
+          </div>`).join('')}
+      </div>` : ''}
+      ${pickupSoon.length ? `<div>
+        <div style="font-weight:700; color:var(--dusty-blue); margin-bottom:6px;">📦 قريب الخروج (${pickupSoon.length})</div>
+        ${pickupSoon.map(b=>`
+          <div class="booking-row">
+            <div class="booking-info">
+              <b>${b.customer}</b> — ${b.dressName} <span style="color:var(--ink-soft); font-size:12px;">(${b.dressCode})</span>
+              <div class="booking-dates">يخرج: ${b.start} · ${relativeDayLabel(b.diff)} ${b.phone ? '· '+b.phone : ''}</div>
+            </div>
+            <button class="btn btn-gold" onclick="openReceipt('${b.id}')">الوصل</button>
+          </div>`).join('')}
+      </div>` : ''}
+    </div>
+  `;
+}
+
+async function toggleNotifications(){
+  if(!('Notification' in window)){
+    showToast('المتصفح لا يدعم الإشعارات');
+    return;
+  }
+  if(Notification.permission !== 'granted'){
+    const perm = await Notification.requestPermission();
+    if(perm !== 'granted'){
+      showToast('يجب السماح بالإشعارات من إعدادات المتصفح');
+      return;
+    }
+  }
+  const current = await storageGet('notifications_enabled');
+  const newVal = !(current && current.value === 'true');
+  await storageSet('notifications_enabled', newVal ? 'true' : 'false');
+  updateNotifBtnUI(newVal);
+  showToast(newVal ? 'تم تفعيل تنبيهات الإرجاع والخروج ✓' : 'تم إيقاف الإشعارات');
+  if(newVal) checkAndNotify(true);
+}
+
+function updateNotifBtnUI(enabled){
+  const btn = document.getElementById('notifBtn');
+  if(btn) btn.textContent = enabled ? '🔔' : '🔕';
+}
+
+async function applySavedNotifSetting(){
+  if(!('Notification' in window)) return;
+  const saved = await storageGet('notifications_enabled');
+  const enabled = !!(saved && saved.value === 'true' && Notification.permission === 'granted');
+  updateNotifBtnUI(enabled);
+}
+
+async function checkAndNotify(force){
+  if(!('Notification' in window)) return;
+  if(Notification.permission !== 'granted') return;
+  const enabledSetting = await storageGet('notifications_enabled');
+  if(!enabledSetting || enabledSetting.value !== 'true') return;
+  const { overdue, dueSoon, pickupSoon } = computeAlerts();
+  const total = overdue.length + dueSoon.length + pickupSoon.length;
+  if(total === 0) return;
+  if(!force){
+    const todayStr = new Date().toISOString().slice(0,10);
+    const last = await storageGet('last_notified_date');
+    if(last && last.value === todayStr) return;
+    await storageSet('last_notified_date', todayStr);
+  }
+  const parts = [];
+  if(overdue.length) parts.push(`${overdue.length} حجز متأخر فالإرجاع`);
+  if(dueSoon.length) parts.push(`${dueSoon.length} حجز قريب الإرجاع`);
+  if(pickupSoon.length) parts.push(`${pickupSoon.length} حجز قريب الخروج`);
+  try{
+    new Notification('Royaumede la mriée 🔔', { body: parts.join(' · ') });
+  }catch(e){ console.error('notification error', e); }
+}
 
 function buildReceiptText(b){
   const remaining = (b.total - b.paid).toFixed(2);
@@ -567,6 +713,7 @@ function openReceipt(bookingId){
         <div class="receipt-box" id="receipt-text">${text}</div>
         <div class="btn-row">
           <button class="btn btn-gold" onclick="copyReceipt()">نسخ الوصل</button>
+          <button class="btn btn-ghost" onclick="printReceipt()">🖨 طباعة</button>
           ${ waLink ? `<a class="btn" style="background:#25D366; color:#fff;" href="${waLink}" target="_blank" rel="noopener">إرسال عبر واتساب</a>` : `<button class="btn" style="background:#ccc; color:#666;" disabled title="أضف رقم الهاتف فحجز هاد الزبونة">إرسال عبر واتساب</button>` }
           <button class="btn btn-ghost" onclick="closeModal()">إغلاق</button>
         </div>
@@ -605,6 +752,20 @@ function fallbackCopy(text, cb){
   }catch(e){ showToast('تعذر النسخ، انسخ يدويا'); }
 }
 
+function printReceipt(){
+  const text = document.getElementById('receipt-text').innerText;
+  const win = window.open('', '_blank', 'width=380,height=600');
+  if(!win){ showToast('يرجى السماح بالنوافذ المنبثقة للطباعة'); return; }
+  win.document.write(`
+    <html dir="rtl"><head><title>وصل الزبون</title>
+    <style>
+      body{ font-family: 'Courier New', monospace; padding:20px; direction:rtl; white-space:pre-wrap; font-size:14px; line-height:1.8; }
+    </style></head>
+    <body onload="window.print(); window.close();">${text.replace(/</g,'&lt;')}</body></html>
+  `);
+  win.document.close();
+}
+
 function renderDashboard(){
   const total = state.dresses.length;
   const rented = state.dresses.filter(d=>d.status==='rented').length;
@@ -614,6 +775,7 @@ function renderDashboard(){
   const totalUnpaid = unpaidBookings.reduce((s,b)=> s + (b.total-b.paid), 0);
 
   return `
+    ${renderAlertsSection()}
     <div class="stats">
       <div class="stat-card"><div class="num">${total}</div><div class="label">مجموع الفساتين</div></div>
       <div class="stat-card"><div class="num">${available}</div><div class="label">متوفرة الآن</div></div>
@@ -640,7 +802,7 @@ function renderDashboard(){
         <div class="booking-row">
           <div class="booking-info">
             <b>${b.customer}</b> — ${b.dressName} <span style="color:var(--ink-soft); font-size:12px;">(${b.dressCode})</span>
-            <div class="booking-dates">${b.start} إلى ${b.end} ${b.phone ? '· '+b.phone : ''}</div>
+            <div class="booking-dates">${b.start} إلى ${b.end} ${b.phone ? '· '+b.phone : ''}${bookingUrgencyBadge(b)}</div>
             <div class="money-line"><span class="paid">مدفوع: ${b.paid.toFixed(2)}</span><span class="due">متبقي: ${(b.total-b.paid).toFixed(2)}</span></div>
           </div>
           <div style="display:flex; gap:8px; flex-wrap:wrap;">
@@ -745,6 +907,67 @@ function renderDresses(){
   `;
 }
 
+function updateBookingFilter(){
+  state.bookingSearch = document.getElementById('bookingSearchInput').value.trim().toLowerCase();
+  state.bookingStatusFilter = document.getElementById('bookingStatusFilter').value;
+  renderBookingList();
+}
+
+function getFilteredBookings(){
+  return state.bookings.filter(b=>{
+    const matchesStatus = state.bookingStatusFilter === 'all'
+      || (state.bookingStatusFilter === 'active' && !b.returned)
+      || (state.bookingStatusFilter === 'returned' && b.returned)
+      || (state.bookingStatusFilter === 'unpaid' && (b.total - b.paid) > 0);
+    const q = state.bookingSearch;
+    const matchesSearch = !q ||
+      (b.customer && b.customer.toLowerCase().includes(q)) ||
+      (b.dressName && b.dressName.toLowerCase().includes(q)) ||
+      (b.dressCode && b.dressCode.toLowerCase().includes(q)) ||
+      (b.phone && b.phone.toLowerCase().includes(q)) ||
+      (b.start && b.start.includes(q)) ||
+      (b.end && b.end.includes(q));
+    return matchesStatus && matchesSearch;
+  });
+}
+
+function bookingListHTML(){
+  const list = getFilteredBookings();
+  if(!state.bookings.length){
+    return `<div class="empty"><span class="display">لا توجد حجوزات بعد</span>سجل أول حجز فالأعلى</div>`;
+  }
+  if(!list.length){
+    return `<div class="empty"><span class="display">لا توجد نتائج</span>جرب كلمة بحث أو فلتر آخر</div>`;
+  }
+  return list.map(b=>`
+    <div class="booking-row">
+      <div class="booking-info">
+        <b>${b.customer}</b> — ${b.dressName} <span style="color:var(--ink-soft); font-size:12px;">(${b.dressCode})</span>
+        <div class="booking-dates">${b.start} إلى ${b.end} ${b.phone ? '· '+b.phone : ''} ${b.returned ? '· <span style="color:var(--sage)">تم الإرجاع</span>' : ''}${bookingUrgencyBadge(b)}</div>
+        <div class="money-line">
+          الكلي: ${b.total.toFixed(2)} ·
+          <span class="paid">مدفوع: ${b.paid.toFixed(2)}</span>
+          <span class="due">متبقي: ${(b.total-b.paid).toFixed(2)}</span>
+        </div>
+        ${ (b.total-b.paid) > 0 ? `<div style="margin-top:6px; display:flex; gap:6px; align-items:center;">
+            <input type="number" min="0" step="0.01" placeholder="تحديث المدفوع" style="width:140px; padding:6px 8px; font-size:12px;" onkeydown="if(event.key==='Enter'){ updatePayment('${b.id}', this.value); }">
+            <span style="font-size:11px; color:var(--ink-soft);">اضغط Enter للتحديث</span>
+          </div>` : '' }
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn btn-gold" onclick="openReceipt('${b.id}')">الوصل</button>
+        ${!b.returned ? `<button class="btn btn-ghost" onclick="markReturned('${b.id}')">تم الإرجاع</button>` : ''}
+        <button class="btn-danger" onclick="deleteBooking('${b.id}')">حذف</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderBookingList(){
+  const wrap = document.getElementById('bookingListWrap');
+  if(wrap) wrap.innerHTML = bookingListHTML();
+}
+
 function renderBookings(){
   const bookableDresses = state.dresses.filter(d=>d.status!=='cleaning');
   const dressOptions = bookableDresses.map(d=>`<option value="${d.id}">${d.code} — ${d.name} ${d.status==='rented' ? '(محجوز حاليا فترات أخرى)' : ''}</option>`).join('')
@@ -767,30 +990,16 @@ function renderBookings(){
     </form>
 
     <div class="section-title"><h2 class="display">كل الحجوزات</h2><div class="dash"></div></div>
-    <div class="card">
-      ${ state.bookings.length ? state.bookings.map(b=>`
-        <div class="booking-row">
-          <div class="booking-info">
-            <b>${b.customer}</b> — ${b.dressName} <span style="color:var(--ink-soft); font-size:12px;">(${b.dressCode})</span>
-            <div class="booking-dates">${b.start} إلى ${b.end} ${b.phone ? '· '+b.phone : ''} ${b.returned ? '· <span style=\"color:var(--sage)\">تم الإرجاع</span>' : ''}</div>
-            <div class="money-line">
-              الكلي: ${b.total.toFixed(2)} ·
-              <span class="paid">مدفوع: ${b.paid.toFixed(2)}</span>
-              <span class="due">متبقي: ${(b.total-b.paid).toFixed(2)}</span>
-            </div>
-            ${ (b.total-b.paid) > 0 ? `<div style="margin-top:6px; display:flex; gap:6px; align-items:center;">
-                <input type="number" min="0" step="0.01" placeholder="تحديث المدفوع" style="width:140px; padding:6px 8px; font-size:12px;" onkeydown="if(event.key==='Enter'){ updatePayment('${b.id}', this.value); }">
-                <span style="font-size:11px; color:var(--ink-soft);">اضغط Enter للتحديث</span>
-              </div>` : '' }
-          </div>
-          <div style="display:flex; gap:8px; flex-wrap:wrap;">
-            <button class="btn btn-gold" onclick="openReceipt('${b.id}')">الوصل</button>
-            ${!b.returned ? `<button class="btn btn-ghost" onclick="markReturned('${b.id}')">تم الإرجاع</button>` : ''}
-            <button class="btn-danger" onclick="deleteBooking('${b.id}')">حذف</button>
-          </div>
-        </div>
-      `).join('') : `<div class="empty"><span class="display">لا توجد حجوزات بعد</span>سجل أول حجز فالأعلى</div>` }
+    <div class="filter-bar">
+      <input id="bookingSearchInput" type="text" placeholder="🔍 بحث بالزبونة، الفستان، الكود، الهاتف، أو التاريخ" value="${state.bookingSearch}" oninput="updateBookingFilter()">
+      <select id="bookingStatusFilter" onchange="updateBookingFilter()">
+        <option value="all" ${state.bookingStatusFilter==='all'?'selected':''}>كل الحجوزات</option>
+        <option value="active" ${state.bookingStatusFilter==='active'?'selected':''}>نشطة (لم ترجع)</option>
+        <option value="returned" ${state.bookingStatusFilter==='returned'?'selected':''}>تم إرجاعها</option>
+        <option value="unpaid" ${state.bookingStatusFilter==='unpaid'?'selected':''}>فيها مبلغ متبقي</option>
+      </select>
     </div>
+    <div class="card" id="bookingListWrap">${bookingListHTML()}</div>
   `;
 }
 
@@ -917,6 +1126,8 @@ function importBackup(e){
 async function initApp(){
   await loadData();
   await applySavedDarkMode();
+  await applySavedNotifSetting();
+  checkAndNotify(false);
   const pass = await storageGet('app_password');
   if(pass && pass.value){
     showLockScreen('login');
