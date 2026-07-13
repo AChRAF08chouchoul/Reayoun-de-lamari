@@ -4,6 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Royaumede la mriée</title>
+<meta name="theme-color" content="#6B2737">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Royaumede la mriée">
+<link rel="icon" id="appIconLink" href="">
+<link rel="apple-touch-icon" id="appleIconLink" href="">
+<link rel="manifest" id="appManifestLink" href="">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cairo:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -1198,6 +1206,40 @@ function previewShopLogo(e){
   });
 }
 
+function buildDefaultIconDataUri(){
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512"><rect width="512" height="512" rx="100" fill="#6B2737"/><text x="50%" y="58%" font-size="260" text-anchor="middle" dominant-baseline="middle">💐</text></svg>`;
+  return 'data:image/svg+xml,' + encodeURIComponent(svg);
+}
+
+function updateAppIcons(){
+  const iconHref = state.shopLogo || buildDefaultIconDataUri();
+  const iconLink = document.getElementById('appIconLink');
+  const appleLink = document.getElementById('appleIconLink');
+  if(iconLink) iconLink.href = iconHref;
+  if(appleLink) appleLink.href = iconHref;
+
+  const manifest = {
+    name: state.shopName || 'Royaumede la mriée',
+    short_name: (state.shopName || 'Royaumede').slice(0, 12),
+    start_url: '.',
+    display: 'standalone',
+    background_color: '#F7F1E8',
+    theme_color: '#6B2737',
+    icons: [
+      { src: iconHref, sizes: '512x512', type: state.shopLogo ? 'image/jpeg' : 'image/svg+xml', purpose: 'any' }
+    ]
+  };
+  try{
+    const blob = new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' });
+    const url = URL.createObjectURL(blob);
+    const manifestLink = document.getElementById('appManifestLink');
+    if(manifestLink){
+      if(manifestLink.href && manifestLink.href.startsWith('blob:')) URL.revokeObjectURL(manifestLink.href);
+      manifestLink.href = url;
+    }
+  }catch(e){ console.error('manifest build error', e); }
+}
+
 function updateTopbarBranding(){
   const wrap = document.getElementById('shopLogoWrap');
   const heading = document.getElementById('shopNameHeading');
@@ -1207,6 +1249,7 @@ function updateTopbarBranding(){
   if(heading){
     heading.textContent = state.shopLogo ? state.shopName : `💐 ${state.shopName}`;
   }
+  updateAppIcons();
 }
 
 async function saveShopSettings(e){
@@ -1569,6 +1612,8 @@ function lockNow(){
 }
 
 initApp();
+updateAppIcons();
+
 </script>
 </body>
 </html>
