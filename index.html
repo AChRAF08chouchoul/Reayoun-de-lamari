@@ -154,6 +154,21 @@
   .filter-bar{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
   .filter-bar input, .filter-bar select{ flex:1; min-width:140px; }
   .backup-actions{ display:flex; gap:10px; flex-wrap:wrap; }
+  .cal-grid{ display:grid; grid-template-columns: repeat(7,1fr); gap:4px; }
+  .cal-weekday{ text-align:center; font-size:11px; color:var(--ink-soft); font-weight:700; padding:4px 0; }
+  .cal-cell{
+    aspect-ratio:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    border-radius:8px; cursor:pointer; background:#FCFAF6; border:1px solid var(--line); position:relative;
+  }
+  .cal-cell.empty{ background:transparent; border:none; cursor:default; }
+  .cal-cell.today{ border-color:var(--gold); border-width:2px; }
+  .cal-cell:hover:not(.empty){ background: var(--blush); }
+  .cal-daynum{ font-size:13px; }
+  .cal-dot{ width:6px; height:6px; border-radius:50%; margin-top:2px; position:static; }
+  .cal-dot.busy{ background:#a33; }
+  .cal-dot.past{ background:var(--sage); }
+  .cal-legend{ display:flex; gap:16px; margin-top:14px; font-size:12px; color:var(--ink-soft); flex-wrap:wrap; align-items:center; }
+  .cal-legend .cal-dot{ display:inline-block; margin-inline-end:4px; }
 </style>
 </head>
 <body>
@@ -178,6 +193,7 @@
   <button class="active" data-tab="dashboard">لوحة التحكم</button>
   <button data-tab="dresses">الفساتين</button>
   <button data-tab="bookings">الحجوزات</button>
+  <button data-tab="calendar">التقويم</button>
   <button data-tab="reports">التقارير</button>
 </div>
 
@@ -202,6 +218,7 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 const DRESSES_COL = db.collection('dresses');
 const BOOKINGS_COL = db.collection('bookings');
+const BACKUPS_COL = db.collection('backups');
 const SETTINGS_DOC = db.collection('settings').doc('app');
 
 const COLORS = {
@@ -209,7 +226,16 @@ const COLORS = {
   'وردي':'#D98BA6', 'أبيض':'#E8E2D6', 'أسود':'#2B2320', 'بنفسجي':'#7D5A8C'
 };
 
-let state = { dresses: [], bookings: [], tab: 'dashboard', loaded:false, dressSearch:'', dressStatusFilter:'all', bookingSearch:'', bookingStatusFilter:'all' };
+const now_ = new Date();
+let state = {
+  dresses: [], bookings: [], tab: 'dashboard', loaded:false,
+  dressSearch:'', dressStatusFilter:'all',
+  bookingSearch:'', bookingStatusFilter:'all',
+  customerSearch:'',
+  calendarYear: now_.getFullYear(), calendarMonth: now_.getMonth(),
+  recentBackups: [],
+  shopName: 'Royaumede la mriée', shopPhone: ''
+};
 
 let __settingsCache = null;
 
@@ -310,6 +336,7 @@ async function applySavedDarkMode(){
 function switchTab(tab){
   state.tab = tab;
   document.querySelectorAll('.nav button').forEach(b=> b.classList.toggle('active', b.dataset.tab === tab));
+  if(tab === 'reports') refreshBackupsList();
   render();
 }
 document.querySelectorAll('.nav button').forEach(b=> b.addEventListener('click', ()=> switchTab(b.dataset.tab)));
@@ -687,8 +714,8 @@ async function checkAndNotify(force){
 function buildReceiptText(b){
   const remaining = (b.total - b.paid).toFixed(2);
   return `———————————————
-      Royaumede la mriée
-———————————————
+      ${state.shopName}
+${state.shopPhone ? 'هاتف المحل: '+state.shopPhone+'\n' : ''}———————————————
 الزبونة: ${b.customer}
 ${b.phone ? 'الهاتف: '+b.phone+'\n' : ''}الفستان: ${b.dressName} (${b.dressCode})
 من: ${b.start}   إلى: ${b.end}
@@ -968,6 +995,97 @@ function renderBookingList(){
   if(wrap) wrap.innerHTML = bookingListHTML();
 }
 
+const ARABIC_MONTHS = ['يناير','فبراير','مارس','أبريل','ماي','يونيو','يوليوز','غشت','شتنبر','أكتوبر','نونبر','دجنبر'];
+const ARABIC_WEEKDAYS = ['أحد','اثنين','ثلاثاء','أربعاء','خميس','جمعة','سبت'];
+
+function pad2(n){ return String(n).padStart(2,'0'); }
+function toDateStr(y,m,d){ return `${y}-${pad2(m+1)}-${pad2(d)}`; }
+
+function getBookingsForDate(dateStr){
+  return state.bookings.filter(b=> dateStr >= b.start && dateStr <= b.end);
+}
+
+function changeCalendarMonth(delta){
+  let m = state.calendarMonth + delta;
+  let y = state.calendarYear;
+  if(m < 0){ m = 11; y--; }
+  if(m > 11){ m = 0; y++; }
+  state.calendarMonth = m; state.calendarYear = y;
+  render();
+}
+
+function renderCalendar(){
+  const y = state.calendarYear, m = state.calendarMonth;
+  const firstDay = new Date(y, m, 1).getDay();
+  const daysInMonth = new Date(y, m+1, 0).getDate();
+  const todayStr = new Date().toISOString().slice(0,10);
+
+  let cells = '';
+  for(let i=0;i<firstDay;i++) cells += `<div class="cal-cell empty"></div>`;
+  for(let d=1; d<=daysInMonth; d++){
+    const dateStr = toDateStr(y,m,d);
+    const bookingsToday = getBookingsForDate(dateStr);
+    const isToday = dateStr === todayStr;
+    let dotClass = '';
+    if(bookingsToday.length){
+      dotClass = bookingsToday.some(b=>!b.returned) ? 'busy' : 'past';
+    }
+    cells += `<div class="cal-cell ${isToday?'today':''}" onclick="showDayBookings('${dateStr}')">
+      <div class="cal-daynum">${d}</div>
+      ${bookingsToday.length ? `<div class="cal-dot ${dotClass}"></div>` : ''}
+    </div>`;
+  }
+
+  return `
+    <div class="section-title"><h2 class="display">📅 تقويم الحجوزات</h2><div class="dash"></div></div>
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <button class="btn btn-ghost" onclick="changeCalendarMonth(-1)">‹ السابق</button>
+        <div style="font-weight:700; font-family:'Amiri'; font-size:18px; color:var(--burgundy-dark);">${ARABIC_MONTHS[m]} ${y}</div>
+        <button class="btn btn-ghost" onclick="changeCalendarMonth(1)">التالي ›</button>
+      </div>
+      <div class="cal-grid cal-weekdays">
+        ${ARABIC_WEEKDAYS.map(w=>`<div class="cal-weekday">${w}</div>`).join('')}
+      </div>
+      <div class="cal-grid">${cells}</div>
+      <div class="cal-legend">
+        <span><span class="cal-dot busy"></span>فيها حجز نشط</span>
+        <span><span class="cal-dot past"></span>حجز راجع/منتهي</span>
+      </div>
+    </div>
+    <div id="dayBookingsWrap">${(function(){
+      const t = getBookingsForDate(todayStr);
+      return t.length ? dayBookingsHTML(todayStr) : `<div class="card empty" style="padding:20px;"><span class="display">اليوم</span>لا توجد حجوزات نشطة اليوم، اضغط على أي يوم فالتقويم لتفاصيله</div>`;
+    })()}</div>
+  `;
+}
+
+function dayBookingsHTML(dateStr){
+  const bookings = getBookingsForDate(dateStr);
+  if(!bookings.length){
+    return `<div class="card empty" style="padding:20px;"><span class="display">${dateStr}</span>لا توجد حجوزات فهاد اليوم</div>`;
+  }
+  return `
+    <div class="section-title"><h2 class="display">حجوزات يوم ${dateStr}</h2><div class="dash"></div></div>
+    <div class="card">
+      ${bookings.map(b=>`
+        <div class="booking-row">
+          <div class="booking-info">
+            <b>${b.customer}</b> — ${b.dressName} <span style="color:var(--ink-soft); font-size:12px;">(${b.dressCode})</span>
+            <div class="booking-dates">${b.start} إلى ${b.end} ${b.phone ? '· '+b.phone : ''} ${b.returned ? '· <span style="color:var(--sage)">تم الإرجاع</span>' : ''}</div>
+          </div>
+          <button class="btn btn-gold" onclick="openReceipt('${b.id}')">الوصل</button>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function showDayBookings(dateStr){
+  const wrap = document.getElementById('dayBookingsWrap');
+  if(wrap) wrap.innerHTML = dayBookingsHTML(dateStr);
+}
+
 function renderBookings(){
   const bookableDresses = state.dresses.filter(d=>d.status!=='cleaning');
   const dressOptions = bookableDresses.map(d=>`<option value="${d.id}">${d.code} — ${d.name} ${d.status==='rented' ? '(محجوز حاليا فترات أخرى)' : ''}</option>`).join('')
@@ -1001,6 +1119,149 @@ function renderBookings(){
     </div>
     <div class="card" id="bookingListWrap">${bookingListHTML()}</div>
   `;
+}
+
+function getCustomerSummaries(query){
+  const map = {};
+  state.bookings.forEach(b=>{
+    const key = (b.customer||'').trim().toLowerCase();
+    if(!key) return;
+    if(!map[key]) map[key] = { name: b.customer, phone: b.phone||'', bookings: [], totalPaid:0, totalDue:0, totalAgreed:0 };
+    map[key].bookings.push(b);
+    map[key].totalPaid += b.paid;
+    map[key].totalAgreed += b.total;
+    map[key].totalDue += (b.total - b.paid);
+    if(!map[key].phone && b.phone) map[key].phone = b.phone;
+  });
+  let list = Object.values(map);
+  if(query){
+    const q = query.toLowerCase();
+    list = list.filter(c=> c.name.toLowerCase().includes(q) || (c.phone && c.phone.toLowerCase().includes(q)));
+  }
+  list.sort((a,b)=> b.bookings.length - a.bookings.length);
+  return list;
+}
+
+function updateCustomerSearch(){
+  state.customerSearch = document.getElementById('customerSearchInput').value.trim();
+  renderCustomerList();
+}
+
+function renderCustomerList(){
+  const wrap = document.getElementById('customerListWrap');
+  if(wrap) wrap.innerHTML = customerListHTML();
+}
+
+function customerListHTML(){
+  const list = getCustomerSummaries(state.customerSearch);
+  if(!state.bookings.length){
+    return `<div class="empty"><span class="display">لا توجد بيانات بعد</span>سجل حجوزات باش يبان هنا سجل الزبونات</div>`;
+  }
+  if(!list.length){
+    return `<div class="empty"><span class="display">لا توجد نتائج</span>جرب اسم أو رقم هاتف آخر</div>`;
+  }
+  return list.map(c=>`
+    <div class="booking-row" style="flex-direction:column; align-items:stretch;">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+        <div><b style="color:var(--burgundy-dark); font-size:15px;">${c.name}</b> ${c.phone?`<span class="meta">· ${c.phone}</span>`:''}</div>
+        <div class="money-line">
+          <span>حجوزات: ${c.bookings.length}</span>
+          <span class="paid">مدفوع: ${c.totalPaid.toFixed(2)}</span>
+          <span class="due">متبقي: ${c.totalDue.toFixed(2)}</span>
+        </div>
+      </div>
+      <div style="margin-top:8px; font-size:12px; color:var(--ink-soft);">
+        ${c.bookings.slice().sort((a,b)=> a.start<b.start?1:-1).map(b=> `${b.dressCode} (${b.start} ← ${b.end})${b.returned?' ✓':''}`).join('&nbsp;&nbsp;|&nbsp;&nbsp;')}
+      </div>
+    </div>
+  `).join('');
+}
+
+async function saveShopSettings(e){
+  e.preventDefault();
+  const f = e.target;
+  state.shopName = f.shopName.value.trim() || 'Royaumede la mriée';
+  state.shopPhone = f.shopPhone.value.trim();
+  await storageSet('shop_name', state.shopName);
+  await storageSet('shop_phone', state.shopPhone);
+  showToast('تم حفظ إعدادات المحل ✓');
+}
+
+async function applyShopSettings(){
+  const name = await storageGet('shop_name');
+  const phone = await storageGet('shop_phone');
+  state.shopName = (name && name.value) || 'Royaumede la mriée';
+  state.shopPhone = (phone && phone.value) || '';
+}
+
+async function autoBackupIfNeeded(){
+  try{
+    const todayStr = new Date().toISOString().slice(0,10);
+    const last = await storageGet('last_auto_backup_date');
+    if(last && last.value === todayStr) return;
+    const backupDoc = {
+      date: todayStr,
+      timestamp: new Date().toISOString(),
+      dresses: state.dresses,
+      bookings: state.bookings
+    };
+    await BACKUPS_COL.doc(todayStr).set(backupDoc);
+    await storageSet('last_auto_backup_date', todayStr);
+    const snap = await BACKUPS_COL.orderBy('date','desc').get();
+    const docs = snap.docs;
+    if(docs.length > 14){
+      const toDelete = docs.slice(14);
+      const batch = db.batch();
+      toDelete.forEach(d=> batch.delete(d.ref));
+      await batch.commit();
+    }
+  }catch(e){ console.error('auto backup error', e); }
+}
+
+async function loadRecentBackups(){
+  try{
+    const snap = await BACKUPS_COL.orderBy('date','desc').limit(14).get();
+    return snap.docs.map(d=>d.data());
+  }catch(e){ console.error('load backups error', e); return []; }
+}
+
+async function refreshBackupsList(){
+  state.recentBackups = await loadRecentBackups();
+  if(state.tab === 'reports') render();
+}
+
+async function restoreAutoBackup(dateId){
+  if(!confirm(`متأكد من استرجاع نسخة يوم ${dateId}؟ هذا سيستبدل كل البيانات الحالية.`)) return;
+  try{
+    const doc = await BACKUPS_COL.doc(dateId).get();
+    if(!doc.exists){ showToast('تعذر إيجاد هاد النسخة'); return; }
+    const data = doc.data();
+    showToast('جاري الاسترجاع...');
+    const oldDressIds = state.dresses.map(d=>d.id);
+    const oldBookingIds = state.bookings.map(b=>b.id);
+    state.dresses = data.dresses || [];
+    state.bookings = data.bookings || [];
+    const batchSize = 400;
+    const allWrites = [
+      ...oldDressIds.map(id=>({col:DRESSES_COL, id, del:true})),
+      ...oldBookingIds.map(id=>({col:BOOKINGS_COL, id, del:true})),
+      ...state.dresses.map(d=>({col:DRESSES_COL, id:d.id, data:d})),
+      ...state.bookings.map(b=>({col:BOOKINGS_COL, id:b.id, data:b}))
+    ];
+    for(let i=0; i<allWrites.length; i+=batchSize){
+      const batch = db.batch();
+      allWrites.slice(i, i+batchSize).forEach(w=>{
+        const ref = w.col.doc(w.id);
+        if(w.del) batch.delete(ref); else batch.set(ref, w.data);
+      });
+      await batch.commit();
+    }
+    showToast('تم استرجاع النسخة الاحتياطية ✓');
+    render();
+  }catch(e){
+    console.error(e);
+    showToast('تعذر الاسترجاع');
+  }
 }
 
 function renderReports(){
@@ -1040,6 +1301,21 @@ function renderReports(){
       </table>` : `<div class="empty"><span class="display">لا توجد بيانات بعد</span>سجل حجوزات باش تبان هنا التقارير</div>` }
     </div>
 
+    <div class="section-title"><h2 class="display">👤 سجل الزبونات</h2><div class="dash"></div></div>
+    <div class="filter-bar">
+      <input id="customerSearchInput" type="text" placeholder="🔍 بحث بالاسم أو رقم الهاتف" value="${state.customerSearch}" oninput="updateCustomerSearch()">
+    </div>
+    <div class="card" id="customerListWrap">${customerListHTML()}</div>
+
+    <div class="section-title"><h2 class="display">🏬 إعدادات المحل</h2><div class="dash"></div></div>
+    <form class="card" onsubmit="saveShopSettings(event)">
+      <div class="form-grid">
+        <div><label>اسم المحل (يبان فالوصل)</label><input name="shopName" value="${state.shopName.replace(/"/g,'&quot;')}"></div>
+        <div><label>رقم هاتف المحل (اختياري)</label><input name="shopPhone" value="${state.shopPhone.replace(/"/g,'&quot;')}"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" type="submit">حفظ إعدادات المحل</button></div>
+    </form>
+
     <div class="section-title"><h2 class="display">نسخة احتياطية</h2><div class="dash"></div></div>
     <div class="card">
       <p style="font-size:13px; color:var(--ink-soft); margin-top:0;">حمل نسخة من كل بياناتك (الفساتين والحجوزات) كملف، أو استرجع نسخة سابقة.</p>
@@ -1048,6 +1324,24 @@ function renderReports(){
         <button class="btn btn-ghost" onclick="document.getElementById('importBackupInput').click()">⬆ استيراد نسخة احتياطية</button>
         <input type="file" id="importBackupInput" accept="application/json" style="display:none;" onchange="importBackup(event)">
       </div>
+    </div>
+
+    <div class="section-title"><h2 class="display">🕒 النسخ التلقائية</h2><div class="dash"></div></div>
+    <div class="card">
+      <p style="font-size:13px; color:var(--ink-soft); margin-top:0;">يحفظ التطبيق تلقائيا نسخة من بياناتك مرة كل يوم عند فتحه. تقدري تسترجعي أي نسخة من هنا.</p>
+      ${ state.recentBackups && state.recentBackups.length ? `<table>
+        <thead><tr><th>التاريخ</th><th>فساتين</th><th>حجوزات</th><th></th></tr></thead>
+        <tbody>
+          ${state.recentBackups.map(bk=>`
+            <tr>
+              <td>${bk.date}</td>
+              <td>${(bk.dresses||[]).length}</td>
+              <td>${(bk.bookings||[]).length}</td>
+              <td><button class="btn btn-ghost" style="padding:6px 10px; font-size:12px;" onclick="restoreAutoBackup('${bk.date}')">استرجاع</button></td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>` : `<div class="empty" style="padding:20px;">جاري التحميل، أو لا توجد نسخ تلقائية بعد</div>` }
     </div>
   `;
 }
@@ -1058,6 +1352,7 @@ function render(){
   if(state.tab === 'dashboard') app.innerHTML = renderDashboard();
   else if(state.tab === 'dresses') app.innerHTML = renderDresses();
   else if(state.tab === 'bookings') app.innerHTML = renderBookings();
+  else if(state.tab === 'calendar') app.innerHTML = renderCalendar();
   else app.innerHTML = renderReports();
 }
 
@@ -1127,7 +1422,9 @@ async function initApp(){
   await loadData();
   await applySavedDarkMode();
   await applySavedNotifSetting();
+  await applyShopSettings();
   checkAndNotify(false);
+  autoBackupIfNeeded();
   const pass = await storageGet('app_password');
   if(pass && pass.value){
     showLockScreen('login');
