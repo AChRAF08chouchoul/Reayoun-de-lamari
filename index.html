@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Royaumede la mriée</title>
+<title>Royaume de la Mariée</title>
 <meta name="theme-color" content="#6B2737">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Royaumede la mriée">
+<meta name="apple-mobile-web-app-title" content="Royaume de la Mariée">
 <link rel="icon" id="appIconLink" href="">
 <link rel="apple-touch-icon" id="appleIconLink" href="">
 <link rel="manifest" id="appManifestLink" href="">
@@ -195,7 +195,7 @@
     <div style="display:flex; align-items:center; gap:12px;">
       <div id="shopLogoWrap" class="shop-logo-wrap"></div>
       <div>
-        <h1 class="display" id="shopNameHeading">💐 Royaumede la mriée</h1>
+        <h1 class="display" id="shopNameHeading">💐 Royaume de la Mariée</h1>
         <p>إدارة المخزون والحجوزات لمحلك</p>
       </div>
     </div>
@@ -253,7 +253,7 @@ let state = {
   customerSearch:'',
   calendarYear: now_.getFullYear(), calendarMonth: now_.getMonth(),
   recentBackups: [],
-  shopName: 'Royaumede la mriée', shopPhone: '', shopLogo: null
+  shopName: 'Royaume de la Mariée', shopPhone: '', shopLogo: null
 };
 
 let __settingsCache = null;
@@ -664,7 +664,12 @@ async function deleteBooking(id){
 async function updatePayment(id, value){
   const b = state.bookings.find(b=>b.id===id);
   if(!b) return;
-  b.paid = Math.max(0, parseFloat(value)||0);
+  let paid = Math.max(0, parseFloat(value)||0);
+  if(paid > b.total){
+    paid = b.total;
+    showToast('المبلغ المدفوع لا يمكن أن يتجاوز المبلغ الكلي، تم ضبطه تلقائيا');
+  }
+  b.paid = paid;
   render();
   await saveBookingToCloud(b);
 }
@@ -806,7 +811,7 @@ async function checkAndNotify(force){
   if(dueSoon.length) parts.push(`${dueSoon.length} حجز قريب الإرجاع`);
   if(pickupSoon.length) parts.push(`${pickupSoon.length} حجز قريب الخروج`);
   try{
-    new Notification('Royaumede la mriée 🔔', { body: parts.join(' · ') });
+    new Notification('Royaume de la Mariée 🔔', { body: parts.join(' · ') });
   }catch(e){ console.error('notification error', e); }
 }
 
@@ -848,11 +853,17 @@ function openReceipt(bookingId){
     </div>
   `;
 }
+// Normalizes an Algerian phone number into the international digits format
+// required by wa.me (no "+", no spaces/dashes). Handles the common ways
+// customers' numbers get typed in: local "0xxxxxxxxx", already-international
+// "+213xxxxxxxxx" / "213xxxxxxxxx" / "00213xxxxxxxxx", or with spaces/dashes in between.
 function normalizePhone(phone){
-  let p = phone.replace(/[^0-9+]/g,'');
-  if(p.startsWith('+')) return p.slice(1);
-  if(p.startsWith('0')) return '212' + p.slice(1);
-  return p;
+  let p = String(phone||'').trim().replace(/[^0-9+]/g,'');
+  if(p.startsWith('+')) p = p.slice(1);
+  if(p.startsWith('00')) p = p.slice(2);
+  if(p.startsWith('213')) return p;
+  if(p.startsWith('0')) return '213' + p.slice(1);
+  return '213' + p;
 }
 function closeModal(){ document.getElementById('modal-root').innerHTML = ''; }
 
@@ -1208,7 +1219,7 @@ function renderBookings(){
       <div class="form-grid">
         <div style="grid-column:1/-1;"><label>الفساتين (يمكن اختيار أكثر من واحد)</label>${dressChecklist}</div>
         <div><label>اسم الزبونة</label><input name="customer" required></div>
-        <div><label>رقم الهاتف</label><input name="phone"></div>
+        <div><label>رقم الهاتف</label><input name="phone" type="tel" placeholder="0551 23 45 67" dir="ltr"></div>
         <div><label>تاريخ البداية</label><input name="start" type="date" required></div>
         <div><label>تاريخ النهاية</label><input name="end" type="date" required></div>
         <div><label>المبلغ الكلي</label><input name="total" type="number" min="0" step="0.01" placeholder="0"></div>
@@ -1312,8 +1323,8 @@ function updateAppIcons(){
   if(appleLink) appleLink.href = iconHref;
 
   const manifest = {
-    name: state.shopName || 'Royaumede la mriée',
-    short_name: (state.shopName || 'Royaumede').slice(0, 12),
+    name: state.shopName || 'Royaume de la Mariée',
+    short_name: (state.shopName || 'Royaume').slice(0, 12),
     start_url: '.',
     display: 'standalone',
     background_color: '#F7F1E8',
@@ -1348,7 +1359,7 @@ function updateTopbarBranding(){
 async function saveShopSettings(e){
   e.preventDefault();
   const f = e.target;
-  state.shopName = f.shopName.value.trim() || 'Royaumede la mriée';
+  state.shopName = f.shopName.value.trim() || 'Royaume de la Mariée';
   state.shopPhone = f.shopPhone.value.trim();
   const file = f.shopLogo && f.shopLogo.files[0];
   if(file){
@@ -1375,7 +1386,7 @@ async function applyShopSettings(){
   const name = await storageGet('shop_name');
   const phone = await storageGet('shop_phone');
   const logo = await storageGet('shop_logo');
-  state.shopName = (name && name.value) || 'Royaumede la mriée';
+  state.shopName = (name && name.value) || 'Royaume de la Mariée';
   state.shopPhone = (phone && phone.value) || '';
   state.shopLogo = (logo && logo.value) || null;
   updateTopbarBranding();
@@ -1498,7 +1509,7 @@ function renderReports(){
     <form class="card" onsubmit="saveShopSettings(event)">
       <div class="form-grid">
         <div><label>اسم المحل (يبان فالوصل)</label><input name="shopName" value="${esc(state.shopName)}"></div>
-        <div><label>رقم هاتف المحل (اختياري)</label><input name="shopPhone" value="${esc(state.shopPhone)}"></div>
+        <div><label>رقم هاتف المحل (اختياري)</label><input name="shopPhone" type="tel" dir="ltr" placeholder="0551 23 45 67" value="${esc(state.shopPhone)}"></div>
         <div>
           <label>شعار المحل (اختياري)</label>
           <input name="shopLogo" type="file" accept="image/*" onchange="previewShopLogo(event)">
@@ -1650,7 +1661,7 @@ function showLockScreen(mode){
     root.innerHTML = `
       <div class="modal-overlay" style="z-index:100;">
         <div class="modal">
-          <div class="section-title" style="margin-top:0;"><h2 class="display">🔒 Royaumede la mriée</h2></div>
+          <div class="section-title" style="margin-top:0;"><h2 class="display">🔒 Royaume de la Mariée</h2></div>
           <p style="font-size:13px; color:var(--ink-soft); margin-top:-6px;">دخل كلمة السر باش توصل للتطبيق</p>
           <form onsubmit="loginPassword(event)">
             <input type="password" name="pw" required autofocus placeholder="كلمة السر">
