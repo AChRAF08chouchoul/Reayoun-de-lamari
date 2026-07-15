@@ -223,6 +223,7 @@
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script>
 const firebaseConfig = {
   apiKey: "AIzaSyBoazDRPLvecSX-I1usog5-U6ib6LL10cI",
@@ -235,6 +236,15 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
+const auth = firebase.auth();
+// The app uses a single shop-wide account behind the scenes (the person only
+// ever types a password, never an email) so this login doesn't collide with
+// any other Firebase project using the same auth backend.
+const APP_LOGIN_EMAIL = 'shop-owner@royaume-de-la-mariee.app';
+// Require a real sign-in every time the app is opened (matches the previous
+// "always show the lock screen on launch" behavior) instead of silently
+// staying signed in across browser restarts.
+auth.setPersistence(firebase.auth.Auth.Persistence.SESSION).catch(e=>console.error('auth persistence error', e));
 const DRESSES_COL = db.collection('dresses');
 const BOOKINGS_COL = db.collection('bookings');
 const BACKUPS_COL = db.collection('backups');
@@ -1625,18 +1635,8 @@ function importBackup(e){
 }
 
 async function initApp(){
-  await loadData();
-  await applySavedDarkMode();
-  await applySavedNotifSetting();
-  await applyShopSettings();
-  checkAndNotify(false);
-  autoBackupIfNeeded();
-  const pass = await storageGet('app_password');
-  if(pass && pass.value){
-    showLockScreen('login');
-  } else {
-    showLockScreen('setup');
-  }
+  const knowsAccount = localStorage.getItem('rm_account_created') === 'true';
+  showLockScreen(knowsAccount ? 'login' : 'setup');
 }
 
 function showLockScreen(mode){
@@ -1649,10 +1649,11 @@ function showLockScreen(mode){
           <div class="section-title" style="margin-top:0;"><h2 class="display">🔒 تعيين كلمة السر</h2></div>
           <p style="font-size:13px; color:var(--ink-soft); margin-top:-6px;">هاد الكلمة غادي تلزمك باش تدخل للتطبيق فالمرات الجاية</p>
           <form onsubmit="setupPassword(event)">
-            <div style="margin-bottom:10px;"><label>كلمة السر</label><input type="password" name="pw1" required minlength="4"></div>
-            <div><label>أكد كلمة السر</label><input type="password" name="pw2" required minlength="4"></div>
+            <div style="margin-bottom:10px;"><label>كلمة السر</label><input type="password" name="pw1" required minlength="6"></div>
+            <div><label>أكد كلمة السر</label><input type="password" name="pw2" required minlength="6"></div>
             <div id="setup-error" style="color:#a33; font-size:13px; margin-top:8px;"></div>
             <div class="btn-row"><button class="btn btn-primary" type="submit">حفظ وتشغيل التطبيق</button></div>
+            <p style="font-size:12px; margin-top:12px;">عندك حساب من قبل؟ <a href="#" onclick="showLockScreen('login'); return false;">سجلي الدخول</a></p>
           </form>
         </div>
       </div>
@@ -1667,6 +1668,7 @@ function showLockScreen(mode){
             <input type="password" name="pw" required autofocus placeholder="كلمة السر">
             <div id="login-error" style="color:#a33; font-size:13px; margin-top:8px;"></div>
             <div class="btn-row"><button class="btn btn-primary" type="submit">دخول</button></div>
+            <p style="font-size:12px; margin-top:12px;">أول مرة على هاد الجهاز؟ <a href="#" onclick="showLockScreen('setup'); return false;">عيّني كلمة سر</a></p>
           </form>
         </div>
       </div>
@@ -1674,44 +1676,70 @@ function showLockScreen(mode){
   }
 }
 
-async function hashPassword(pw){
-  const enc = new TextEncoder().encode(pw);
-  const hashBuf = await crypto.subtle.digest('SHA-256', enc);
-  return Array.from(new Uint8Array(hashBuf)).map(b=>b.toString(16).padStart(2,'0')).join('');
-}
-
 async function setupPassword(e){
   e.preventDefault();
   const f = e.target;
+  const errBox = document.getElementById('setup-error');
+  errBox.textContent = '';
   if(f.pw1.value !== f.pw2.value){
-    document.getElementById('setup-error').textContent = 'كلمتا السر غير متطابقتين';
+    errBox.textContent = 'كلمتا السر غير متطابقتين';
     return;
   }
-  const hashed = await hashPassword(f.pw1.value);
-  await storageSet('app_password', hashed);
-  unlockApp();
+  try{
+    await auth.createUserWithEmailAndPassword(APP_LOGIN_EMAIL, f.pw1.value);
+    localStorage.setItem('rm_account_created', 'true');
+    await unlockApp();
+  }catch(err){
+    console.error('signup error', err);
+    if(err.code === 'auth/email-already-in-use'){
+      localStorage.setItem('rm_account_created', 'true');
+      errBox.textContent = 'كلمة السر معينة من قبل، دخلي بيها من "سجلي الدخول"';
+    } else if(err.code === 'auth/weak-password'){
+      errBox.textContent = 'كلمة السر ضعيفة، اختاري كلمة أطول';
+    } else {
+      errBox.textContent = 'تعذر إنشاء الحساب، تحقق من الاتصال بالإنترنت';
+    }
+  }
 }
 
 async function loginPassword(e){
   e.preventDefault();
   const f = e.target;
-  const stored = await storageGet('app_password');
-  const hashed = await hashPassword(f.pw.value);
-  if(stored && stored.value === hashed){
-    unlockApp();
-  } else {
-    document.getElementById('login-error').textContent = 'كلمة السر غير صحيحة';
+  const errBox = document.getElementById('login-error');
+  errBox.textContent = '';
+  try{
+    await auth.signInWithEmailAndPassword(APP_LOGIN_EMAIL, f.pw.value);
+    localStorage.setItem('rm_account_created', 'true');
+    await unlockApp();
+  }catch(err){
+    console.error('login error', err);
+    if(err.code === 'auth/user-not-found'){
+      errBox.textContent = 'ما كايناش كلمة سر معينة بعد، دوزي على "عيّني كلمة سر"';
+    } else if(err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential'){
+      errBox.textContent = 'كلمة السر غير صحيحة';
+    } else {
+      errBox.textContent = 'تعذر تسجيل الدخول، تحقق من الاتصال بالإنترنت';
+    }
   }
 }
 
-function unlockApp(){
+async function unlockApp(){
   const root = document.getElementById('lock-screen');
+  root.innerHTML = `<div class="empty">جاري التحميل...</div>`;
+  await loadData();
+  await applySavedDarkMode();
+  await applySavedNotifSetting();
+  await applyShopSettings();
+  checkAndNotify(false);
+  autoBackupIfNeeded();
   root.innerHTML = '';
   root.style.display = 'none';
   render();
 }
 
 function lockNow(){
+  auth.signOut().catch(e=>console.error('sign out error', e));
+  state.loaded = false;
   showLockScreen('login');
 }
 
