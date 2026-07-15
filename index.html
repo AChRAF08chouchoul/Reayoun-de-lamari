@@ -1696,8 +1696,12 @@ async function setupPassword(e){
       errBox.textContent = 'كلمة السر معينة من قبل، دخلي بيها من "سجلي الدخول"';
     } else if(err.code === 'auth/weak-password'){
       errBox.textContent = 'كلمة السر ضعيفة، اختاري كلمة أطول';
+    } else if(err.code === 'auth/operation-not-allowed'){
+      errBox.textContent = 'خدمة Email/Password ماشي مفعّلة فـ Firebase، فعّليها من Authentication → Sign-in method';
+    } else if(err.code === 'auth/unauthorized-domain'){
+      errBox.textContent = 'هاد الدومين ماشي مسموح فـ Firebase، زيديه فـ Authentication → Settings → Authorized domains';
     } else {
-      errBox.textContent = 'تعذر إنشاء الحساب، تحقق من الاتصال بالإنترنت';
+      errBox.textContent = 'تعذر إنشاء الحساب (' + (err.code || err.message || 'خطأ غير معروف') + ')';
     }
   }
 }
@@ -1717,8 +1721,12 @@ async function loginPassword(e){
       errBox.textContent = 'ما كايناش كلمة سر معينة بعد، دوزي على "عيّني كلمة سر"';
     } else if(err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential'){
       errBox.textContent = 'كلمة السر غير صحيحة';
+    } else if(err.code === 'auth/operation-not-allowed'){
+      errBox.textContent = 'خدمة Email/Password ماشي مفعّلة فـ Firebase، فعّليها من Authentication → Sign-in method';
+    } else if(err.code === 'auth/unauthorized-domain'){
+      errBox.textContent = 'هاد الدومين ماشي مسموح فـ Firebase، زيديه فـ Authentication → Settings → Authorized domains';
     } else {
-      errBox.textContent = 'تعذر تسجيل الدخول، تحقق من الاتصال بالإنترنت';
+      errBox.textContent = 'تعذر تسجيل الدخول (' + (err.code || err.message || 'خطأ غير معروف') + ')';
     }
   }
 }
