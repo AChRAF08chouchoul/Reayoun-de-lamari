@@ -161,6 +161,13 @@
   body.dark .no-photo{ color:#ddd; }
   .filter-bar{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
   .filter-bar input, .filter-bar select{ flex:1; min-width:140px; }
+  .dress-checklist{
+    display:flex; flex-direction:column; gap:2px; max-height:220px; overflow-y:auto;
+    border:1px solid var(--line); border-radius:9px; padding:8px 10px; background:#FCFAF6;
+  }
+  .dress-check-item{ display:flex; align-items:center; gap:8px; padding:6px 2px; font-size:14px; cursor:pointer; }
+  .dress-check-item input{ width:auto; flex:none; }
+  body.dark .dress-checklist{ background:#241D1A; }
   .backup-actions{ display:flex; gap:10px; flex-wrap:wrap; }
   .cal-grid{ display:grid; grid-template-columns: repeat(7,1fr); gap:4px; }
   .cal-weekday{ text-align:center; font-size:11px; color:var(--ink-soft); font-weight:700; padding:4px 0; }
@@ -494,29 +501,48 @@ function daysBetween(start, end){
   return Math.max(diff, 1);
 }
 
+// Returns a booking's dresses as an array of {dressId, dressName, dressCode},
+// whether it was saved in the new multi-dress shape or the old single-dress shape.
+function bookingDressList(b){
+  if(Array.isArray(b.dresses) && b.dresses.length) return b.dresses;
+  if(b.dressId) return [{ dressId:b.dressId, dressName:b.dressName, dressCode:b.dressCode }];
+  return [];
+}
+function bookingDressLabel(b){
+  return bookingDressList(b).map(d=> `${d.dressName} (${d.dressCode})`).join('، ');
+}
+function bookingDressCodes(b){
+  return bookingDressList(b).map(d=> d.dressCode).join('، ');
+}
+
 function findBookingConflict(dressId, start, end, excludeBookingId){
   if(!start || !end) return null;
   return state.bookings.find(b =>
-    b.dressId === dressId &&
     !b.returned &&
     b.id !== excludeBookingId &&
-    start <= b.end && b.start <= end
+    start <= b.end && b.start <= end &&
+    bookingDressList(b).some(d=> d.dressId === dressId)
   ) || null;
 }
 
 function onBookingDressOrDateChange(form){
-  const dressId = form.dress.value;
-  const dress = state.dresses.find(d=>d.id===dressId);
-  if(dress && form.start.value && form.end.value){
+  const checked = [...form.querySelectorAll('input[name="dresses"]:checked')];
+  const selectedDresses = checked.map(cb=> state.dresses.find(d=>d.id===cb.value)).filter(Boolean);
+  if(selectedDresses.length && form.start.value && form.end.value){
     const days = daysBetween(form.start.value, form.end.value);
-    form.total.value = (dress.price * days).toFixed(2);
+    const sum = selectedDresses.reduce((s,d)=> s + (d.price||0), 0);
+    form.total.value = (sum * days).toFixed(2);
   }
   const msgEl = document.getElementById('conflictMsg');
   if(!msgEl) return;
-  const conflict = findBookingConflict(dressId, form.start.value, form.end.value, form.dataset.editingId || null);
-  if(conflict){
+  const conflicts = checked
+    .map(cb=> findBookingConflict(cb.value, form.start.value, form.end.value, form.dataset.editingId || null))
+    .filter(Boolean);
+  if(conflicts.length){
     msgEl.style.display = 'block';
-    msgEl.textContent = `⚠ هذا الفستان محجوز فعلا من ${conflict.start} إلى ${conflict.end} (الزبونة: ${esc(conflict.customer)}). اختر تواريخ أخرى أو فستانا آخر.`;
+    msgEl.textContent = conflicts.map(c=>
+      `⚠ ${esc(bookingDressLabel(c))} محجوز فعلا من ${c.start} إلى ${c.end} (الزبونة: ${esc(c.customer)}).`
+    ).join(' ');
   } else {
     msgEl.style.display = 'none';
     msgEl.textContent = '';
@@ -526,26 +552,26 @@ function onBookingDressOrDateChange(form){
 async function addBooking(e){
   e.preventDefault();
   const f = e.target;
-  const dressId = f.dress.value;
-  const dress = state.dresses.find(d=>d.id===dressId);
-  if(!dress) return;
+  const checked = [...f.querySelectorAll('input[name="dresses"]:checked')];
+  if(!checked.length){ alert('اختر فستانا واحدا على الأقل'); return; }
+  const selectedDresses = checked.map(cb=> state.dresses.find(d=>d.id===cb.value)).filter(Boolean);
   const start = f.start.value, end = f.end.value;
   if(start && end && end < start){
     alert('تاريخ النهاية يجب أن يكون بعد تاريخ البداية أو مساويا له');
     return;
   }
-  const conflict = findBookingConflict(dressId, start, end, null);
-  if(conflict){
-    alert(`لا يمكن الحجز: هذا الفستان محجوز فعلا من ${conflict.start} إلى ${conflict.end} (الزبونة: ${esc(conflict.customer)}). اختر تواريخ أخرى أو فستانا آخر.`);
-    return;
+  for(const d of selectedDresses){
+    const conflict = findBookingConflict(d.id, start, end, null);
+    if(conflict){
+      alert(`لا يمكن الحجز: ${bookingDressLabel(conflict)} محجوز فعلا من ${conflict.start} إلى ${conflict.end} (الزبونة: ${conflict.customer}). اختر تواريخ أخرى أو فستانا آخر.`);
+      return;
+    }
   }
   const total = parseFloat(f.total.value) || 0;
   const paid = parseFloat(f.paid.value) || 0;
   const booking = {
     id: uid(),
-    dressId,
-    dressName: dress.name,
-    dressCode: dress.code,
+    dresses: selectedDresses.map(d=> ({ dressId:d.id, dressName:d.name, dressCode:d.code })),
     customer: f.customer.value.trim(),
     phone: f.phone.value.trim(),
     start, end,
@@ -554,9 +580,9 @@ async function addBooking(e){
   };
   if(!booking.customer || !booking.start || !booking.end) return;
   state.bookings.unshift(booking);
-  dress.status = 'rented';
+  selectedDresses.forEach(d=> d.status = 'rented');
   await saveBookingToCloud(booking);
-  await saveDressToCloud(dress);
+  await Promise.all(selectedDresses.map(d=> saveDressToCloud(d)));
   f.reset();
   render();
   openReceipt(booking.id);
@@ -566,14 +592,16 @@ async function markReturned(id){
   const b = state.bookings.find(b=>b.id===id);
   if(!b) return;
   b.returned = true;
-  const dress = state.dresses.find(d=>d.id===b.dressId);
-  if(dress){
-    const stillActive = state.bookings.some(x=>x.dressId===dress.id && !x.returned);
+  const involvedDresses = bookingDressList(b)
+    .map(d=> state.dresses.find(x=>x.id===d.dressId))
+    .filter(Boolean);
+  involvedDresses.forEach(dress=>{
+    const stillActive = state.bookings.some(x=> !x.returned && bookingDressList(x).some(bd=>bd.dressId===dress.id));
     dress.status = stillActive ? 'rented' : 'cleaning';
-  }
+  });
   render();
   await saveBookingToCloud(b);
-  if(dress) await saveDressToCloud(dress);
+  await Promise.all(involvedDresses.map(d=> saveDressToCloud(d)));
 }
 async function deleteBooking(id){
   if(!confirm('متأكد من حذف هاد الحجز؟ هاد العملية ما ترجعش.')) return;
@@ -644,7 +672,7 @@ function renderAlertsSection(){
         ${overdue.map(b=>`
           <div class="booking-row">
             <div class="booking-info">
-              <b>${esc(b.customer)}</b> — ${esc(b.dressName)} <span style="color:var(--ink-soft); font-size:12px;">(${esc(b.dressCode)})</span>
+              <b>${esc(b.customer)}</b> — ${esc(bookingDressLabel(b))}
               <div class="booking-dates">كان يرجع: ${b.end} · <span class="due">${relativeDayLabel(b.diff)}</span> ${b.phone ? '· '+esc(b.phone) : ''}</div>
             </div>
             <button class="btn btn-ghost" onclick="markReturned('${b.id}')">تم الإرجاع</button>
@@ -655,7 +683,7 @@ function renderAlertsSection(){
         ${dueSoon.map(b=>`
           <div class="booking-row">
             <div class="booking-info">
-              <b>${esc(b.customer)}</b> — ${esc(b.dressName)} <span style="color:var(--ink-soft); font-size:12px;">(${esc(b.dressCode)})</span>
+              <b>${esc(b.customer)}</b> — ${esc(bookingDressLabel(b))}
               <div class="booking-dates">يرجع: ${b.end} · ${relativeDayLabel(b.diff)} ${b.phone ? '· '+esc(b.phone) : ''}</div>
             </div>
             <button class="btn btn-ghost" onclick="markReturned('${b.id}')">تم الإرجاع</button>
@@ -666,7 +694,7 @@ function renderAlertsSection(){
         ${pickupSoon.map(b=>`
           <div class="booking-row">
             <div class="booking-info">
-              <b>${esc(b.customer)}</b> — ${esc(b.dressName)} <span style="color:var(--ink-soft); font-size:12px;">(${esc(b.dressCode)})</span>
+              <b>${esc(b.customer)}</b> — ${esc(bookingDressLabel(b))}
               <div class="booking-dates">يخرج: ${b.start} · ${relativeDayLabel(b.diff)} ${b.phone ? '· '+esc(b.phone) : ''}</div>
             </div>
             <button class="btn btn-gold" onclick="openReceipt('${b.id}')">الوصل</button>
@@ -737,7 +765,7 @@ function buildReceiptText(b){
       ${esc(state.shopName)}
 ${state.shopPhone ? 'هاتف المحل: '+esc(state.shopPhone)+'\n' : ''}———————————————
 الزبونة: ${esc(b.customer)}
-${b.phone ? 'الهاتف: '+esc(b.phone)+'\n' : ''}الفستان: ${esc(b.dressName)} (${esc(b.dressCode)})
+${b.phone ? 'الهاتف: '+esc(b.phone)+'\n' : ''}الفستان: ${esc(bookingDressLabel(b))}
 من: ${b.start}   إلى: ${b.end}
 ———————————————
 المبلغ الكلي: ${b.total.toFixed(2)} دج
@@ -842,7 +870,7 @@ function renderDashboard(){
       ${unpaidBookings.map(b=>`
         <div class="booking-row">
           <div class="booking-info">
-            <b>${esc(b.customer)}</b> — ${esc(b.dressName)} <span style="color:var(--ink-soft); font-size:12px;">(${esc(b.dressCode)})</span>
+            <b>${esc(b.customer)}</b> — ${esc(bookingDressLabel(b))}
             <div class="money-line"><span class="due">متبقي: ${(b.total-b.paid).toFixed(2)} دج</span></div>
           </div>
           <button class="btn btn-gold" onclick="openReceipt('${b.id}')">الوصل</button>
@@ -854,7 +882,7 @@ function renderDashboard(){
       ${ activeBookings.length ? activeBookings.map(b=>`
         <div class="booking-row">
           <div class="booking-info">
-            <b>${esc(b.customer)}</b> — ${esc(b.dressName)} <span style="color:var(--ink-soft); font-size:12px;">(${esc(b.dressCode)})</span>
+            <b>${esc(b.customer)}</b> — ${esc(bookingDressLabel(b))}
             <div class="booking-dates">${b.start} إلى ${b.end} ${b.phone ? '· '+esc(b.phone) : ''}${bookingUrgencyBadge(b)}</div>
             <div class="money-line"><span class="paid">مدفوع: ${b.paid.toFixed(2)}</span><span class="due">متبقي: ${(b.total-b.paid).toFixed(2)}</span></div>
           </div>
@@ -975,8 +1003,7 @@ function getFilteredBookings(){
     const q = state.bookingSearch;
     const matchesSearch = !q ||
       (b.customer && b.customer.toLowerCase().includes(q)) ||
-      (b.dressName && b.dressName.toLowerCase().includes(q)) ||
-      (b.dressCode && b.dressCode.toLowerCase().includes(q)) ||
+      (bookingDressLabel(b).toLowerCase().includes(q)) ||
       (b.phone && b.phone.toLowerCase().includes(q)) ||
       (b.start && b.start.includes(q)) ||
       (b.end && b.end.includes(q));
@@ -995,7 +1022,7 @@ function bookingListHTML(){
   return list.map(b=>`
     <div class="booking-row">
       <div class="booking-info">
-        <b>${esc(b.customer)}</b> — ${esc(b.dressName)} <span style="color:var(--ink-soft); font-size:12px;">(${esc(b.dressCode)})</span>
+        <b>${esc(b.customer)}</b> — ${esc(bookingDressLabel(b))}
         <div class="booking-dates">${b.start} إلى ${b.end} ${b.phone ? '· '+esc(b.phone) : ''} ${b.returned ? '· <span style="color:var(--sage)">تم الإرجاع</span>' : ''}${bookingUrgencyBadge(b)}</div>
         <div class="money-line">
           الكلي: ${b.total.toFixed(2)} ·
@@ -1097,7 +1124,7 @@ function dayBookingsHTML(dateStr){
       ${bookings.map(b=>`
         <div class="booking-row">
           <div class="booking-info">
-            <b>${esc(b.customer)}</b> — ${esc(b.dressName)} <span style="color:var(--ink-soft); font-size:12px;">(${esc(b.dressCode)})</span>
+            <b>${esc(b.customer)}</b> — ${esc(bookingDressLabel(b))}
             <div class="booking-dates">${b.start} إلى ${b.end} ${b.phone ? '· '+esc(b.phone) : ''} ${b.returned ? '· <span style="color:var(--sage)">تم الإرجاع</span>' : ''}</div>
           </div>
           <button class="btn btn-gold" onclick="openReceipt('${b.id}')">الوصل</button>
@@ -1114,14 +1141,21 @@ function showDayBookings(dateStr){
 
 function renderBookings(){
   const bookableDresses = state.dresses.filter(d=>d.status!=='cleaning');
-  const dressOptions = bookableDresses.map(d=>`<option value="${d.id}">${d.code} — ${esc(d.name)} ${d.status==='rented' ? '(محجوز حاليا فترات أخرى)' : ''}</option>`).join('')
-    || `<option disabled selected>لا توجد فساتين متوفرة</option>`;
+  const dressChecklist = bookableDresses.length ? `
+    <div class="dress-checklist">
+      ${bookableDresses.map(d=>`
+        <label class="dress-check-item">
+          <input type="checkbox" name="dresses" value="${d.id}" data-price="${d.price||0}">
+          <span>${d.code} — ${esc(d.name)} <span style="color:var(--ink-soft); font-size:12px;">(${d.price||0} دج/يوم)</span> ${d.status==='rented' ? '<span style="color:var(--amber);">· محجوز حاليا فترات أخرى</span>' : ''}</span>
+        </label>
+      `).join('')}
+    </div>` : `<div class="meta">لا توجد فساتين متوفرة</div>`;
 
   return `
     <div class="section-title"><h2 class="display">حجز جديد</h2><div class="dash"></div></div>
     <form class="card" onsubmit="addBooking(event)" oninput="onBookingDressOrDateChange(this)">
       <div class="form-grid">
-        <div><label>الفستان</label><select name="dress" required>${dressOptions}</select></div>
+        <div style="grid-column:1/-1;"><label>الفساتين (يمكن اختيار أكثر من واحد)</label>${dressChecklist}</div>
         <div><label>اسم الزبونة</label><input name="customer" required></div>
         <div><label>رقم الهاتف</label><input name="phone"></div>
         <div><label>تاريخ البداية</label><input name="start" type="date" required></div>
@@ -1197,7 +1231,7 @@ function customerListHTML(){
         </div>
       </div>
       <div style="margin-top:8px; font-size:12px; color:var(--ink-soft);">
-        ${c.bookings.slice().sort((a,b)=> a.start<b.start?1:-1).map(b=> `${esc(b.dressCode)} (${b.start} ← ${b.end})${b.returned?' ✓':''}`).join('&nbsp;&nbsp;|&nbsp;&nbsp;')}
+        ${c.bookings.slice().sort((a,b)=> a.start<b.start?1:-1).map(b=> `${esc(bookingDressCodes(b))} (${b.start} ← ${b.end})${b.returned?' ✓':''}`).join('&nbsp;&nbsp;|&nbsp;&nbsp;')}
       </div>
     </div>
   `).join('');
@@ -1379,7 +1413,7 @@ function renderReports(){
 
   const rows = state.bookings.slice().sort((a,b)=> (a.start<b.start?1:-1)).map(b=>`
     <tr>
-      <td>${esc(b.dressCode)}</td>
+      <td>${esc(bookingDressCodes(b))}</td>
       <td>${esc(b.customer)}</td>
       <td>${b.start}</td>
       <td>${b.total.toFixed(2)}</td>
