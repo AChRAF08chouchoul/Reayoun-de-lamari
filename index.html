@@ -316,6 +316,14 @@ async function deleteBookingFromCloud(id){
 
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
 
+// Escapes user-entered text before it is inserted into innerHTML, to prevent stored XSS
+// (e.g. a customer or dress name containing "<script>" or event-handler attributes).
+function esc(str){
+  return String(str==null ? '' : str).replace(/[&<>"']/g, m => ({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+  }[m]));
+}
+
 function nextDressCode(){
   let max = 0;
   state.dresses.forEach(d=>{
@@ -440,8 +448,8 @@ function openEditDress(id){
         <div class="section-title" style="margin-top:0;"><h2 class="display">تعديل الفستان</h2></div>
         <form onsubmit="saveDressEdit(event, '${d.id}')">
           <div class="form-grid">
-            <div><label>اسم الفستان</label><input name="name" value="${d.name.replace(/"/g,'&quot;')}" required></div>
-            <div><label>المقاس</label><input name="size" value="${d.size||''}"></div>
+            <div><label>اسم الفستان</label><input name="name" value="${esc(d.name)}" required></div>
+            <div><label>المقاس</label><input name="size" value="${esc(d.size||'')}"></div>
             <div><label>اللون</label><select name="color">${options}</select></div>
             <div><label>سعر الكراء (يوم)</label><input name="price" type="number" min="0" step="0.01" value="${d.price}"></div>
             <div>
@@ -508,7 +516,7 @@ function onBookingDressOrDateChange(form){
   const conflict = findBookingConflict(dressId, form.start.value, form.end.value, form.dataset.editingId || null);
   if(conflict){
     msgEl.style.display = 'block';
-    msgEl.textContent = `⚠ هذا الفستان محجوز فعلا من ${conflict.start} إلى ${conflict.end} (الزبونة: ${conflict.customer}). اختر تواريخ أخرى أو فستانا آخر.`;
+    msgEl.textContent = `⚠ هذا الفستان محجوز فعلا من ${conflict.start} إلى ${conflict.end} (الزبونة: ${esc(conflict.customer)}). اختر تواريخ أخرى أو فستانا آخر.`;
   } else {
     msgEl.style.display = 'none';
     msgEl.textContent = '';
@@ -528,7 +536,7 @@ async function addBooking(e){
   }
   const conflict = findBookingConflict(dressId, start, end, null);
   if(conflict){
-    alert(`لا يمكن الحجز: هذا الفستان محجوز فعلا من ${conflict.start} إلى ${conflict.end} (الزبونة: ${conflict.customer}). اختر تواريخ أخرى أو فستانا آخر.`);
+    alert(`لا يمكن الحجز: هذا الفستان محجوز فعلا من ${conflict.start} إلى ${conflict.end} (الزبونة: ${esc(conflict.customer)}). اختر تواريخ أخرى أو فستانا آخر.`);
     return;
   }
   const total = parseFloat(f.total.value) || 0;
@@ -636,8 +644,8 @@ function renderAlertsSection(){
         ${overdue.map(b=>`
           <div class="booking-row">
             <div class="booking-info">
-              <b>${b.customer}</b> — ${b.dressName} <span style="color:var(--ink-soft); font-size:12px;">(${b.dressCode})</span>
-              <div class="booking-dates">كان يرجع: ${b.end} · <span class="due">${relativeDayLabel(b.diff)}</span> ${b.phone ? '· '+b.phone : ''}</div>
+              <b>${esc(b.customer)}</b> — ${esc(b.dressName)} <span style="color:var(--ink-soft); font-size:12px;">(${esc(b.dressCode)})</span>
+              <div class="booking-dates">كان يرجع: ${b.end} · <span class="due">${relativeDayLabel(b.diff)}</span> ${b.phone ? '· '+esc(b.phone) : ''}</div>
             </div>
             <button class="btn btn-ghost" onclick="markReturned('${b.id}')">تم الإرجاع</button>
           </div>`).join('')}
@@ -647,8 +655,8 @@ function renderAlertsSection(){
         ${dueSoon.map(b=>`
           <div class="booking-row">
             <div class="booking-info">
-              <b>${b.customer}</b> — ${b.dressName} <span style="color:var(--ink-soft); font-size:12px;">(${b.dressCode})</span>
-              <div class="booking-dates">يرجع: ${b.end} · ${relativeDayLabel(b.diff)} ${b.phone ? '· '+b.phone : ''}</div>
+              <b>${esc(b.customer)}</b> — ${esc(b.dressName)} <span style="color:var(--ink-soft); font-size:12px;">(${esc(b.dressCode)})</span>
+              <div class="booking-dates">يرجع: ${b.end} · ${relativeDayLabel(b.diff)} ${b.phone ? '· '+esc(b.phone) : ''}</div>
             </div>
             <button class="btn btn-ghost" onclick="markReturned('${b.id}')">تم الإرجاع</button>
           </div>`).join('')}
@@ -658,8 +666,8 @@ function renderAlertsSection(){
         ${pickupSoon.map(b=>`
           <div class="booking-row">
             <div class="booking-info">
-              <b>${b.customer}</b> — ${b.dressName} <span style="color:var(--ink-soft); font-size:12px;">(${b.dressCode})</span>
-              <div class="booking-dates">يخرج: ${b.start} · ${relativeDayLabel(b.diff)} ${b.phone ? '· '+b.phone : ''}</div>
+              <b>${esc(b.customer)}</b> — ${esc(b.dressName)} <span style="color:var(--ink-soft); font-size:12px;">(${esc(b.dressCode)})</span>
+              <div class="booking-dates">يخرج: ${b.start} · ${relativeDayLabel(b.diff)} ${b.phone ? '· '+esc(b.phone) : ''}</div>
             </div>
             <button class="btn btn-gold" onclick="openReceipt('${b.id}')">الوصل</button>
           </div>`).join('')}
@@ -726,10 +734,10 @@ async function checkAndNotify(force){
 function buildReceiptText(b){
   const remaining = (b.total - b.paid).toFixed(2);
   return `———————————————
-      ${state.shopName}
-${state.shopPhone ? 'هاتف المحل: '+state.shopPhone+'\n' : ''}———————————————
-الزبونة: ${b.customer}
-${b.phone ? 'الهاتف: '+b.phone+'\n' : ''}الفستان: ${b.dressName} (${b.dressCode})
+      ${esc(state.shopName)}
+${state.shopPhone ? 'هاتف المحل: '+esc(state.shopPhone)+'\n' : ''}———————————————
+الزبونة: ${esc(b.customer)}
+${b.phone ? 'الهاتف: '+esc(b.phone)+'\n' : ''}الفستان: ${esc(b.dressName)} (${esc(b.dressCode)})
 من: ${b.start}   إلى: ${b.end}
 ———————————————
 المبلغ الكلي: ${b.total.toFixed(2)} دج
@@ -834,7 +842,7 @@ function renderDashboard(){
       ${unpaidBookings.map(b=>`
         <div class="booking-row">
           <div class="booking-info">
-            <b>${b.customer}</b> — ${b.dressName} <span style="color:var(--ink-soft); font-size:12px;">(${b.dressCode})</span>
+            <b>${esc(b.customer)}</b> — ${esc(b.dressName)} <span style="color:var(--ink-soft); font-size:12px;">(${esc(b.dressCode)})</span>
             <div class="money-line"><span class="due">متبقي: ${(b.total-b.paid).toFixed(2)} دج</span></div>
           </div>
           <button class="btn btn-gold" onclick="openReceipt('${b.id}')">الوصل</button>
@@ -846,8 +854,8 @@ function renderDashboard(){
       ${ activeBookings.length ? activeBookings.map(b=>`
         <div class="booking-row">
           <div class="booking-info">
-            <b>${b.customer}</b> — ${b.dressName} <span style="color:var(--ink-soft); font-size:12px;">(${b.dressCode})</span>
-            <div class="booking-dates">${b.start} إلى ${b.end} ${b.phone ? '· '+b.phone : ''}${bookingUrgencyBadge(b)}</div>
+            <b>${esc(b.customer)}</b> — ${esc(b.dressName)} <span style="color:var(--ink-soft); font-size:12px;">(${esc(b.dressCode)})</span>
+            <div class="booking-dates">${b.start} إلى ${b.end} ${b.phone ? '· '+esc(b.phone) : ''}${bookingUrgencyBadge(b)}</div>
             <div class="money-line"><span class="paid">مدفوع: ${b.paid.toFixed(2)}</span><span class="due">متبقي: ${(b.total-b.paid).toFixed(2)}</span></div>
           </div>
           <div style="display:flex; gap:8px; flex-wrap:wrap;">
@@ -891,12 +899,12 @@ function dressListHTML(){
       ${list.map(d=>`
         <div class="dress-card">
           <div class="swatch" style="background:${COLORS[d.color]||'#ddd'}" ${d.image?`onclick="openLightbox('${d.id}')"`:''}>
-            ${d.image ? `<img src="${d.image}" alt="${d.name}">` : `<span class="no-photo">لا توجد صورة</span>`}
+            ${d.image ? `<img src="${d.image}" alt="${esc(d.name)}">` : `<span class="no-photo">لا توجد صورة</span>`}
             <span class="code-tag">${d.code}</span>
           </div>
           <div class="dress-body">
-            <h3>${d.name}</h3>
-            <div class="meta">المقاس: ${d.size || '—'}</div>
+            <h3>${esc(d.name)}</h3>
+            <div class="meta">المقاس: ${esc(d.size || '—')}</div>
             <div class="meta">السعر: ${d.price} / يوم</div>
             <span class="badge ${d.status}">${statusLabel(d.status)}</span>
             <div class="dress-actions">
@@ -987,8 +995,8 @@ function bookingListHTML(){
   return list.map(b=>`
     <div class="booking-row">
       <div class="booking-info">
-        <b>${b.customer}</b> — ${b.dressName} <span style="color:var(--ink-soft); font-size:12px;">(${b.dressCode})</span>
-        <div class="booking-dates">${b.start} إلى ${b.end} ${b.phone ? '· '+b.phone : ''} ${b.returned ? '· <span style="color:var(--sage)">تم الإرجاع</span>' : ''}${bookingUrgencyBadge(b)}</div>
+        <b>${esc(b.customer)}</b> — ${esc(b.dressName)} <span style="color:var(--ink-soft); font-size:12px;">(${esc(b.dressCode)})</span>
+        <div class="booking-dates">${b.start} إلى ${b.end} ${b.phone ? '· '+esc(b.phone) : ''} ${b.returned ? '· <span style="color:var(--sage)">تم الإرجاع</span>' : ''}${bookingUrgencyBadge(b)}</div>
         <div class="money-line">
           الكلي: ${b.total.toFixed(2)} ·
           <span class="paid">مدفوع: ${b.paid.toFixed(2)}</span>
@@ -1089,8 +1097,8 @@ function dayBookingsHTML(dateStr){
       ${bookings.map(b=>`
         <div class="booking-row">
           <div class="booking-info">
-            <b>${b.customer}</b> — ${b.dressName} <span style="color:var(--ink-soft); font-size:12px;">(${b.dressCode})</span>
-            <div class="booking-dates">${b.start} إلى ${b.end} ${b.phone ? '· '+b.phone : ''} ${b.returned ? '· <span style="color:var(--sage)">تم الإرجاع</span>' : ''}</div>
+            <b>${esc(b.customer)}</b> — ${esc(b.dressName)} <span style="color:var(--ink-soft); font-size:12px;">(${esc(b.dressCode)})</span>
+            <div class="booking-dates">${b.start} إلى ${b.end} ${b.phone ? '· '+esc(b.phone) : ''} ${b.returned ? '· <span style="color:var(--sage)">تم الإرجاع</span>' : ''}</div>
           </div>
           <button class="btn btn-gold" onclick="openReceipt('${b.id}')">الوصل</button>
         </div>
@@ -1106,7 +1114,7 @@ function showDayBookings(dateStr){
 
 function renderBookings(){
   const bookableDresses = state.dresses.filter(d=>d.status!=='cleaning');
-  const dressOptions = bookableDresses.map(d=>`<option value="${d.id}">${d.code} — ${d.name} ${d.status==='rented' ? '(محجوز حاليا فترات أخرى)' : ''}</option>`).join('')
+  const dressOptions = bookableDresses.map(d=>`<option value="${d.id}">${d.code} — ${esc(d.name)} ${d.status==='rented' ? '(محجوز حاليا فترات أخرى)' : ''}</option>`).join('')
     || `<option disabled selected>لا توجد فساتين متوفرة</option>`;
 
   return `
@@ -1181,7 +1189,7 @@ function customerListHTML(){
   return list.map(c=>`
     <div class="booking-row" style="flex-direction:column; align-items:stretch;">
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-        <div><b style="color:var(--burgundy-dark); font-size:15px;">${c.name}</b> ${c.phone?`<span class="meta">· ${c.phone}</span>`:''}</div>
+        <div><b style="color:var(--burgundy-dark); font-size:15px;">${esc(c.name)}</b> ${c.phone?`<span class="meta">· ${esc(c.phone)}</span>`:''}</div>
         <div class="money-line">
           <span>حجوزات: ${c.bookings.length}</span>
           <span class="paid">مدفوع: ${c.totalPaid.toFixed(2)}</span>
@@ -1189,7 +1197,7 @@ function customerListHTML(){
         </div>
       </div>
       <div style="margin-top:8px; font-size:12px; color:var(--ink-soft);">
-        ${c.bookings.slice().sort((a,b)=> a.start<b.start?1:-1).map(b=> `${b.dressCode} (${b.start} ← ${b.end})${b.returned?' ✓':''}`).join('&nbsp;&nbsp;|&nbsp;&nbsp;')}
+        ${c.bookings.slice().sort((a,b)=> a.start<b.start?1:-1).map(b=> `${esc(b.dressCode)} (${b.start} ← ${b.end})${b.returned?' ✓':''}`).join('&nbsp;&nbsp;|&nbsp;&nbsp;')}
       </div>
     </div>
   `).join('');
@@ -1371,8 +1379,8 @@ function renderReports(){
 
   const rows = state.bookings.slice().sort((a,b)=> (a.start<b.start?1:-1)).map(b=>`
     <tr>
-      <td>${b.dressCode}</td>
-      <td>${b.customer}</td>
+      <td>${esc(b.dressCode)}</td>
+      <td>${esc(b.customer)}</td>
       <td>${b.start}</td>
       <td>${b.total.toFixed(2)}</td>
       <td class="paid">${b.paid.toFixed(2)}</td>
@@ -1404,8 +1412,8 @@ function renderReports(){
     <div class="section-title"><h2 class="display">🏬 إعدادات المحل</h2><div class="dash"></div></div>
     <form class="card" onsubmit="saveShopSettings(event)">
       <div class="form-grid">
-        <div><label>اسم المحل (يبان فالوصل)</label><input name="shopName" value="${state.shopName.replace(/"/g,'&quot;')}"></div>
-        <div><label>رقم هاتف المحل (اختياري)</label><input name="shopPhone" value="${state.shopPhone.replace(/"/g,'&quot;')}"></div>
+        <div><label>اسم المحل (يبان فالوصل)</label><input name="shopName" value="${esc(state.shopName)}"></div>
+        <div><label>رقم هاتف المحل (اختياري)</label><input name="shopPhone" value="${esc(state.shopPhone)}"></div>
         <div>
           <label>شعار المحل (اختياري)</label>
           <input name="shopLogo" type="file" accept="image/*" onchange="previewShopLogo(event)">
