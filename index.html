@@ -239,6 +239,18 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
+// Firestore keeps a local copy of everything it has ever synced (IndexedDB).
+// With this enabled: reads work offline (from that local copy), and any
+// add/update/delete made while offline is queued and sent automatically the
+// moment the connection comes back — no more losing offline edits.
+db.enablePersistence({ synchronizeTabs: true }).catch(err=>{
+  if(err.code === 'failed-precondition'){
+    // Persistence can only be enabled in one browser tab at a time.
+    console.warn('Offline persistence: app is open in another tab already.');
+  } else if(err.code === 'unimplemented'){
+    console.warn('Offline persistence: not supported in this browser.');
+  }
+});
 const auth = firebase.auth();
 // The app uses a single shop-wide account behind the scenes (the person only
 // ever types a password, never an email) so this login doesn't collide with
@@ -1917,6 +1929,13 @@ function lockNow(){
 
 initApp();
 updateAppIcons();
+
+// Caches the app page itself so it can open with no internet connection.
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(e=> console.error('SW register failed', e));
+  });
+}
 
 </script>
 </body>
