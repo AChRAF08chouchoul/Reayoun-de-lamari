@@ -755,7 +755,7 @@ function recalcDressStatus(dress){
   );
   if(activeElsewhere){ dress.status = 'rented'; return; }
   const wasEverBooked = state.bookings.some(x=> bookingDressList(x).some(bd=> bd.dressId===dress.id));
-  if(wasEverBooked) dress.status = 'cleaning';
+  dress.status = wasEverBooked ? 'cleaning' : 'available';
 }
 
 async function saveBookingEdit(e, id){
