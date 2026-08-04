@@ -189,6 +189,9 @@
 </head>
 <body>
 <div id="lock-screen"></div>
+<div id="offlineBanner" style="display:none; background:#a33; color:#fff; text-align:center; padding:8px 12px; font-size:13px; font-family:'Cairo';">
+  ⚠ لا يوجد اتصال بالإنترنت — كتشوف آخر نسخة محفوظة فهاد الجهاز، والتعديلات ما غاديش تتحفظ حتى يرجع الاتصال
+</div>
 
 <div class="topbar">
   <div style="display:flex; justify-content:space-between; align-items:flex-start;">
@@ -263,7 +266,8 @@ let state = {
   customerSearch:'',
   calendarYear: now_.getFullYear(), calendarMonth: now_.getMonth(),
   recentBackups: [],
-  shopName: 'Royaume de la Mariée', shopPhone: '', shopLogo: null
+  shopName: 'Royaume de la Mariée', shopPhone: '', shopLogo: null,
+  offline: false
 };
 
 let __settingsCache = null;
@@ -302,17 +306,62 @@ async function storageSet(key, value){
   }
 }
 
+// Saves the current dresses/bookings to localStorage so the app has something
+// to show the next time it can't reach Firestore (e.g. no internet).
+function cacheLocalData(){
+  try{
+    localStorage.setItem('rm_cache_dresses', JSON.stringify(state.dresses));
+    localStorage.setItem('rm_cache_bookings', JSON.stringify(state.bookings));
+  }catch(e){ /* storage full or unavailable, safe to ignore */ }
+}
+function readLocalCache(key){
+  try{ const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : []; }
+  catch(e){ return []; }
+}
+
 async function loadData(){
+  let dressesOk = false, bookingsOk = false;
   try{
     const snap = await DRESSES_COL.get();
     state.dresses = snap.docs.map(d=>d.data());
-  }catch(e){ console.error('load dresses error', e); state.dresses = []; }
+    dressesOk = true;
+  }catch(e){ console.error('load dresses error', e); }
   try{
     const snap = await BOOKINGS_COL.get();
     state.bookings = snap.docs.map(d=>d.data());
-  }catch(e){ console.error('load bookings error', e); state.bookings = []; }
+    bookingsOk = true;
+  }catch(e){ console.error('load bookings error', e); }
+
+  if(!dressesOk) state.dresses = readLocalCache('rm_cache_dresses');
+  if(!bookingsOk) state.bookings = readLocalCache('rm_cache_bookings');
+
+  if(dressesOk && bookingsOk){
+    cacheLocalData();
+    setOfflineMode(false);
+  } else {
+    setOfflineMode(true);
+  }
   state.loaded = true;
 }
+
+// Shows/hides the "no connection" banner and remembers whether we're
+// currently working from cached (possibly outdated) local data.
+function setOfflineMode(isOffline){
+  state.offline = isOffline;
+  const banner = document.getElementById('offlineBanner');
+  if(banner) banner.style.display = isOffline ? 'block' : 'none';
+}
+
+// Tries loadData() again once the browser reports it's back online, so the
+// app switches from cached data to live Firestore data without a manual reload.
+async function retrySyncIfOffline(){
+  if(!state.offline || !state.loaded) return;
+  await loadData();
+  if(!state.offline) showToast('تم استعادة الاتصال، البيانات محدثة ✓');
+  render();
+}
+window.addEventListener('online', retrySyncIfOffline);
+window.addEventListener('offline', ()=> setOfflineMode(true));
 
 async function saveDressToCloud(dress){
   try{ await DRESSES_COL.doc(dress.id).set(dress); }
@@ -623,6 +672,119 @@ async function addBooking(e){
   f.reset();
   render();
   openReceipt(booking.id);
+}
+
+// Opens a modal letting the user correct a booking's customer/phone/dates/
+// dresses/amounts after the fact, instead of having to delete and re-create it
+// (which used to lose the payment and return history).
+function openEditBooking(id){
+  const b = state.bookings.find(x=>x.id===id);
+  if(!b) return;
+  const currentIds = bookingDressList(b).map(d=>d.dressId);
+  // Show every dress that isn't "في التنظيف", plus whichever dresses this
+  // booking already has (even if their current status is cleaning/rented),
+  // so the checklist never hides the booking's own dresses.
+  const selectable = state.dresses.filter(d=> d.status !== 'cleaning' || currentIds.includes(d.id));
+  const checklist = selectable.length ? `
+    <div class="dress-checklist">
+      ${selectable.map(d=>`
+        <label class="dress-check-item">
+          <input type="checkbox" name="dresses" value="${d.id}" data-price="${d.price||0}" ${currentIds.includes(d.id)?'checked':''}>
+          <span>${d.code} — ${esc(d.name)} <span style="color:var(--ink-soft); font-size:12px;">(${d.price||0} دج/يوم)</span></span>
+        </label>
+      `).join('')}
+    </div>` : `<div class="meta">لا توجد فساتين متوفرة</div>`;
+  const root = document.getElementById('modal-root');
+  root.innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this) closeModal()">
+      <div class="modal" style="max-width:420px;">
+        <div class="section-title" style="margin-top:0;"><h2 class="display">تعديل الحجز</h2></div>
+        <form onsubmit="saveBookingEdit(event, '${b.id}')" oninput="onBookingDressOrDateChange(this)" data-editing-id="${b.id}">
+          <div class="form-grid">
+            <div style="grid-column:1/-1;"><label>الفساتين (يمكن اختيار أكثر من واحد)</label>${checklist}</div>
+            <div><label>اسم الزبونة</label><input name="customer" value="${esc(b.customer)}" required></div>
+            <div><label>رقم الهاتف</label><input name="phone" type="tel" dir="ltr" value="${esc(b.phone||'')}"></div>
+            <div><label>تاريخ البداية</label><input name="start" type="date" value="${b.start}" required></div>
+            <div><label>تاريخ النهاية</label><input name="end" type="date" value="${b.end}" required></div>
+            <div><label>المبلغ الكلي</label><input name="total" type="number" min="0" step="0.01" value="${b.total}"></div>
+            <div><label>المبلغ المدفوع</label><input name="paid" type="number" min="0" step="0.01" value="${b.paid}"></div>
+          </div>
+          <div id="conflictMsg" style="display:none; color:#a33; font-size:13px; margin-top:8px; font-weight:600;"></div>
+          <div class="btn-row">
+            <button class="btn btn-primary" type="submit">حفظ التعديلات</button>
+            <button class="btn btn-ghost" type="button" onclick="closeModal()">إلغاء</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+}
+
+// Recomputes a dress's status from scratch based on all bookings: "rented" if
+// it's out on some non-returned booking right now, "cleaning" if it has been
+// booked before but isn't currently out, or left untouched (e.g. "available")
+// if it has never been part of any booking.
+function recalcDressStatus(dress){
+  const activeElsewhere = state.bookings.some(x=>
+    bookingDressList(x).some(bd=> bd.dressId===dress.id && !bd.returned)
+  );
+  if(activeElsewhere){ dress.status = 'rented'; return; }
+  const wasEverBooked = state.bookings.some(x=> bookingDressList(x).some(bd=> bd.dressId===dress.id));
+  if(wasEverBooked) dress.status = 'cleaning';
+}
+
+async function saveBookingEdit(e, id){
+  e.preventDefault();
+  const f = e.target;
+  const b = state.bookings.find(x=>x.id===id);
+  if(!b) return;
+  const checked = [...f.querySelectorAll('input[name="dresses"]:checked')];
+  if(!checked.length){ alert('اختر فستانا واحدا على الأقل'); return; }
+  const selectedDresses = checked.map(cb=> state.dresses.find(d=>d.id===cb.value)).filter(Boolean);
+  const start = f.start.value, end = f.end.value;
+  if(start && end && end < start){
+    alert('تاريخ النهاية يجب أن يكون بعد تاريخ البداية أو مساويا له');
+    return;
+  }
+  for(const d of selectedDresses){
+    const conflict = findBookingConflict(d.id, start, end, id);
+    if(conflict){
+      alert(`لا يمكن الحجز: ${bookingDressLabel(conflict)} محجوز فعلا من ${conflict.start} إلى ${conflict.end} (الزبونة: ${conflict.customer}). اختر تواريخ أخرى أو فستانا آخر.`);
+      return;
+    }
+  }
+  const oldDressIds = bookingDressList(b).map(d=>d.dressId);
+  const oldReturnedMap = {};
+  bookingDressList(b).forEach(d=> oldReturnedMap[d.dressId] = d.returned);
+
+  const total = parseFloat(f.total.value) || 0;
+  let paid = Math.max(0, parseFloat(f.paid.value) || 0);
+  if(paid > total) paid = total;
+
+  b.customer = f.customer.value.trim();
+  b.phone = f.phone.value.trim();
+  b.start = start;
+  b.end = end;
+  b.total = total;
+  b.paid = paid;
+  b.dresses = selectedDresses.map(d=> ({
+    dressId: d.id, dressName: d.name, dressCode: d.code,
+    returned: oldReturnedMap[d.id] !== undefined ? oldReturnedMap[d.id] : false
+  }));
+  delete b.dressId; delete b.dressName; delete b.dressCode;
+  b.returned = b.dresses.every(d=>d.returned);
+
+  if(!b.customer || !b.start || !b.end) return;
+
+  const involvedIds = Array.from(new Set([...oldDressIds, ...b.dresses.map(d=>d.dressId)]));
+  const involvedDresses = involvedIds.map(idd=> state.dresses.find(x=>x.id===idd)).filter(Boolean);
+  involvedDresses.forEach(recalcDressStatus);
+
+  await saveBookingToCloud(b);
+  await Promise.all(involvedDresses.map(d=> saveDressToCloud(d)));
+  closeModal();
+  showToast('تم حفظ تعديلات الحجز ✓');
+  render();
 }
 
 // Marks every dress in a booking as returned in one go ("إرجاع الكل").
@@ -1109,6 +1271,7 @@ function bookingListHTML(){
       <div style="display:flex; gap:8px; flex-wrap:wrap;">
         <button class="btn btn-gold" onclick="openReceipt('${b.id}')">الوصل</button>
         ${bookingReturnButtonHTML(b)}
+        <button class="btn btn-ghost" style="padding:6px 10px; font-size:12px;" onclick="openEditBooking('${b.id}')">تعديل</button>
         <button class="btn-danger" onclick="deleteBooking('${b.id}')">حذف</button>
       </div>
     </div>
@@ -1565,6 +1728,7 @@ function renderReports(){
 function render(){
   const app = document.getElementById('app');
   if(!state.loaded){ app.innerHTML = `<div class="empty">جاري التحميل...</div>`; return; }
+  cacheLocalData();
   if(state.tab === 'dashboard') app.innerHTML = renderDashboard();
   else if(state.tab === 'dresses') app.innerHTML = renderDresses();
   else if(state.tab === 'bookings') app.innerHTML = renderBookings();
