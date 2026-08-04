@@ -216,7 +216,7 @@
   <button data-tab="dresses">الفساتين</button>
   <button data-tab="bookings">الحجوزات</button>
   <button data-tab="calendar">التقويم</button>
-  <button data-tab="reports">التقارير</button>
+  <button data-tab="reports" id="navReportsBtn">التقارير</button>
 </div>
 
 <main id="app"></main>
@@ -256,6 +256,14 @@ const auth = firebase.auth();
 // ever types a password, never an email) so this login doesn't collide with
 // any other Firebase project using the same auth backend.
 const APP_LOGIN_EMAIL = 'shop-owner@royaume-de-la-mariee.app';
+// Second, more limited account: staff can log in with this to manage dresses
+// and bookings, but the app hides the reports/settings/backup tab for them.
+const EMPLOYEE_LOGIN_EMAIL = 'employee@royaume-de-la-mariee.app';
+// A second, independent Firebase app connection (same project) purely so the
+// owner can create/update the employee account from inside the app without
+// signing themselves out of their own session.
+const secondaryApp = firebase.initializeApp(firebaseConfig, 'Secondary');
+const secondaryAuth = secondaryApp.auth();
 // Require a real sign-in every time the app is opened (matches the previous
 // "always show the lock screen on launch" behavior) instead of silently
 // staying signed in across browser restarts.
@@ -279,7 +287,8 @@ let state = {
   calendarYear: now_.getFullYear(), calendarMonth: now_.getMonth(),
   recentBackups: [],
   shopName: 'Royaume de la Mariée', shopPhone: '', shopLogo: null,
-  offline: false
+  offline: false,
+  role: null // 'owner' or 'employee', set right after login
 };
 
 let __settingsCache = null;
@@ -432,6 +441,10 @@ async function applySavedDarkMode(){
 }
 
 function switchTab(tab){
+  if(tab === 'reports' && state.role === 'employee'){
+    showToast('هاد الصفحة خاصة بصاحب المحل');
+    return;
+  }
   state.tab = tab;
   document.querySelectorAll('.nav button').forEach(b=> b.classList.toggle('active', b.dataset.tab === tab));
   if(tab === 'reports') refreshBackupsList();
@@ -1707,6 +1720,20 @@ function renderReports(){
       </div>
     </form>
 
+    <div class="section-title"><h2 class="display">👤 حساب الموظف</h2><div class="dash"></div></div>
+    <div class="card">
+      <p style="font-size:13px; color:var(--ink-soft); margin-top:0;">
+        عيّن كلمة سر خاصة بالموظف باش يدخل للتطبيق (يقدر يدير الفساتين والحجوزات، بلا ما يشوف هاد الصفحة).
+        إذا عندو كلمة سر من قبل وبغيتي تبدلها، دخل القديمة والجديدة مع بعض.
+      </p>
+      <form onsubmit="setEmployeePassword(event)">
+        <div style="margin-bottom:10px;"><label>كلمة السر القديمة (خليها فارغة أول مرة)</label><input type="password" name="oldPw"></div>
+        <div style="margin-bottom:10px;"><label>كلمة السر الجديدة للموظف</label><input type="password" name="newPw" required minlength="6"></div>
+        <div id="employeePwError" style="color:#a33; font-size:13px; margin-bottom:8px;"></div>
+        <div class="btn-row"><button class="btn btn-primary" type="submit">حفظ كلمة سر الموظف</button></div>
+      </form>
+    </div>
+
     <div class="section-title"><h2 class="display">نسخة احتياطية</h2><div class="dash"></div></div>
     <div class="card">
       <p style="font-size:13px; color:var(--ink-soft); margin-top:0;">حمل نسخة من كل بياناتك (الفساتين والحجوزات) كملف، أو استرجع نسخة سابقة.</p>
@@ -1841,6 +1868,11 @@ function showLockScreen(mode){
           <div class="section-title" style="margin-top:0;"><h2 class="display">🔒 Royaume de la Mariée</h2></div>
           <p style="font-size:13px; color:var(--ink-soft); margin-top:-6px;">دخل كلمة السر باش توصل للتطبيق</p>
           <form onsubmit="loginPassword(event)">
+            <div class="btn-row" style="margin-bottom:10px;">
+              <button type="button" class="btn btn-primary" id="roleOwnerBtn" onclick="setLoginRole('owner')">👑 صاحب المحل</button>
+              <button type="button" class="btn btn-ghost" id="roleEmployeeBtn" onclick="setLoginRole('employee')">👤 موظف</button>
+            </div>
+            <input type="hidden" name="role" id="loginRoleInput" value="owner">
             <input type="password" name="pw" required autofocus placeholder="كلمة السر">
             <div id="login-error" style="color:#a33; font-size:13px; margin-top:8px;"></div>
             <div class="btn-row"><button class="btn btn-primary" type="submit">دخول</button></div>
@@ -1849,6 +1881,19 @@ function showLockScreen(mode){
         </div>
       </div>
     `;
+  }
+}
+
+// Toggles which account the login form will sign in as (owner vs employee),
+// just changes which button looks "pressed" and a hidden field the form reads.
+function setLoginRole(role){
+  document.getElementById('loginRoleInput').value = role;
+  const ownerBtn = document.getElementById('roleOwnerBtn');
+  const empBtn = document.getElementById('roleEmployeeBtn');
+  if(role === 'owner'){
+    ownerBtn.className = 'btn btn-primary'; empBtn.className = 'btn btn-ghost';
+  } else {
+    empBtn.className = 'btn btn-primary'; ownerBtn.className = 'btn btn-ghost';
   }
 }
 
@@ -1863,11 +1908,13 @@ async function setupPassword(e){
   }
   try{
     await auth.createUserWithEmailAndPassword(APP_LOGIN_EMAIL, f.pw1.value);
+    state.role = 'owner';
     localStorage.setItem('rm_account_created', 'true');
     await unlockApp();
   }catch(err){
     console.error('signup error', err);
     if(err.code === 'auth/email-already-in-use'){
+      state.role = 'owner';
       localStorage.setItem('rm_account_created', 'true');
       errBox.textContent = 'كلمة السر معينة من قبل، دخلي بيها من "سجلي الدخول"';
     } else if(err.code === 'auth/weak-password'){
@@ -1887,14 +1934,19 @@ async function loginPassword(e){
   const f = e.target;
   const errBox = document.getElementById('login-error');
   errBox.textContent = '';
+  const role = f.role.value === 'employee' ? 'employee' : 'owner';
+  const email = role === 'employee' ? EMPLOYEE_LOGIN_EMAIL : APP_LOGIN_EMAIL;
   try{
-    await auth.signInWithEmailAndPassword(APP_LOGIN_EMAIL, f.pw.value);
+    await auth.signInWithEmailAndPassword(email, f.pw.value);
+    state.role = role;
     localStorage.setItem('rm_account_created', 'true');
     await unlockApp();
   }catch(err){
     console.error('login error', err);
     if(err.code === 'auth/user-not-found'){
-      errBox.textContent = 'ما كايناش كلمة سر معينة بعد، دوزي على "عيّني كلمة سر"';
+      errBox.textContent = role === 'employee'
+        ? 'ما كاينش حساب موظف بعد، صاحب المحل خاصو يعينو من تبويب التقارير'
+        : 'ما كايناش كلمة سر معينة بعد، دوزي على "عيّني كلمة سر"';
     } else if(err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential'){
       errBox.textContent = 'كلمة السر غير صحيحة';
     } else if(err.code === 'auth/operation-not-allowed'){
@@ -1916,14 +1968,59 @@ async function unlockApp(){
   await applyShopSettings();
   checkAndNotify(false);
   autoBackupIfNeeded();
+  const reportsBtn = document.getElementById('navReportsBtn');
+  if(reportsBtn) reportsBtn.style.display = (state.role === 'employee') ? 'none' : '';
+  if(state.role === 'employee' && state.tab === 'reports') state.tab = 'dashboard';
   root.innerHTML = '';
   root.style.display = 'none';
   render();
 }
 
+// Creates the employee account the first time (via the secondary Firebase
+// app, so the owner's own session is untouched), or updates its password if
+// it already exists (requires knowing the current employee password, as a
+// simple safeguard against anyone else changing it).
+async function setEmployeePassword(e){
+  e.preventDefault();
+  const f = e.target;
+  const newPw = f.newPw.value;
+  const oldPw = f.oldPw.value;
+  const errBox = document.getElementById('employeePwError');
+  if(errBox) errBox.textContent = '';
+  try{
+    await secondaryAuth.createUserWithEmailAndPassword(EMPLOYEE_LOGIN_EMAIL, newPw);
+    await secondaryAuth.signOut();
+    showToast('تم تعيين كلمة سر الموظف لأول مرة ✓');
+    f.reset();
+  }catch(err){
+    if(err.code === 'auth/email-already-in-use'){
+      if(!oldPw){
+        if(errBox) errBox.textContent = 'كاين حساب موظف من قبل — دخل كلمة السر القديمة ديالو باش تبدلها';
+        return;
+      }
+      try{
+        await secondaryAuth.signInWithEmailAndPassword(EMPLOYEE_LOGIN_EMAIL, oldPw);
+        await secondaryAuth.currentUser.updatePassword(newPw);
+        await secondaryAuth.signOut();
+        showToast('تم تغيير كلمة سر الموظف ✓');
+        f.reset();
+      }catch(err2){
+        console.error('employee password update error', err2);
+        if(errBox) errBox.textContent = 'كلمة السر القديمة غلط، أو تعذر التغيير (' + (err2.code||'') + ')';
+      }
+    } else if(err.code === 'auth/weak-password'){
+      if(errBox) errBox.textContent = 'كلمة السر ضعيفة، اختار كلمة أطول';
+    } else {
+      console.error('employee password create error', err);
+      if(errBox) errBox.textContent = 'تعذر الحفظ (' + (err.code || err.message || '') + ')';
+    }
+  }
+}
+
 function lockNow(){
   auth.signOut().catch(e=>console.error('sign out error', e));
   state.loaded = false;
+  state.role = null;
   showLockScreen('login');
 }
 
