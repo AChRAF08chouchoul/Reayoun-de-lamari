@@ -636,10 +636,14 @@ function findBookingConflict(dressId, start, end, excludeBookingId){
   ) || null;
 }
 
-function onBookingDressOrDateChange(form){
+function onBookingDressOrDateChange(form, evt){
   const checked = [...form.querySelectorAll('input[name="dresses"]:checked')];
   const selectedDresses = checked.map(cb=> state.dresses.find(d=>d.id===cb.value)).filter(Boolean);
-  if(selectedDresses.length && form.start.value && form.end.value){
+  // Only auto-fill the total when a dress checkbox or a date changed — not
+  // when the user is typing directly into the total field to give a discount.
+  const editedFieldName = evt && evt.target ? evt.target.name : null;
+  const shouldAutoFillTotal = editedFieldName !== 'total' && editedFieldName !== 'paid';
+  if(shouldAutoFillTotal && selectedDresses.length && form.start.value && form.end.value){
     const days = daysBetween(form.start.value, form.end.value);
     const sum = selectedDresses.reduce((s,d)=> s + (d.price||0), 0);
     form.total.value = (sum * days).toFixed(2);
@@ -724,7 +728,7 @@ function openEditBooking(id){
     <div class="modal-overlay" onclick="if(event.target===this) closeModal()">
       <div class="modal" style="max-width:420px;">
         <div class="section-title" style="margin-top:0;"><h2 class="display">تعديل الحجز</h2></div>
-        <form onsubmit="saveBookingEdit(event, '${b.id}')" oninput="onBookingDressOrDateChange(this)" data-editing-id="${b.id}">
+        <form onsubmit="saveBookingEdit(event, '${b.id}')" oninput="onBookingDressOrDateChange(this, event)" data-editing-id="${b.id}">
           <div class="form-grid">
             <div style="grid-column:1/-1;"><label>الفساتين (يمكن اختيار أكثر من واحد)</label>${checklist}</div>
             <div><label>اسم الزبونة</label><input name="customer" value="${esc(b.customer)}" required></div>
@@ -1413,7 +1417,7 @@ function renderBookings(){
 
   return `
     <div class="section-title"><h2 class="display">حجز جديد</h2><div class="dash"></div></div>
-    <form class="card" onsubmit="addBooking(event)" oninput="onBookingDressOrDateChange(this)">
+    <form class="card" onsubmit="addBooking(event)" oninput="onBookingDressOrDateChange(this, event)">
       <div class="form-grid">
         <div style="grid-column:1/-1;"><label>الفساتين (يمكن اختيار أكثر من واحد)</label>${dressChecklist}</div>
         <div><label>اسم الزبونة</label><input name="customer" required></div>
