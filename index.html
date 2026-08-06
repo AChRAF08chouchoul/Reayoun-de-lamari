@@ -252,13 +252,6 @@ db.enablePersistence({ synchronizeTabs: true }).catch(err=>{
   }
 });
 const auth = firebase.auth();
-// The app uses a single shop-wide account behind the scenes (the person only
-// ever types a password, never an email) so this login doesn't collide with
-// any other Firebase project using the same auth backend.
-const APP_LOGIN_EMAIL = 'shop-owner@royaume-de-la-mariee.app';
-// Second, more limited account: staff can log in with this to manage dresses
-// and bookings, but the app hides the reports/settings/backup tab for them.
-const EMPLOYEE_LOGIN_EMAIL = 'employee@royaume-de-la-mariee.app';
 // A second, independent Firebase app connection (same project) purely so the
 // owner can create/update the employee account from inside the app without
 // signing themselves out of their own session.
@@ -268,10 +261,48 @@ const secondaryAuth = secondaryApp.auth();
 // "always show the lock screen on launch" behavior) instead of silently
 // staying signed in across browser restarts.
 auth.setPersistence(firebase.auth.Auth.Persistence.SESSION).catch(e=>console.error('auth persistence error', e));
-const DRESSES_COL = db.collection('dresses');
-const BOOKINGS_COL = db.collection('bookings');
-const BACKUPS_COL = db.collection('backups');
-const SETTINGS_DOC = db.collection('settings').doc('app');
+
+// --- Multi-tenant data layout ---------------------------------------------
+// Each shop owner signs up with their own real email; their Firebase Auth
+// uid becomes the shop's id. Every shop's dresses/bookings/settings/backups
+// live under /shops/{shopId}/..., so many boutiques can share this one app
+// (and this one Firebase project) without ever seeing each other's data.
+//
+// Employees don't get their own uid-based shop; instead each shop gets a
+// short human-friendly "shop code" (stored in the public shopCodes lookup),
+// and the employee account's email is derived from the shop id itself
+// (employee-{shopId}@royaume-de-la-mariee.app), so the owner can create it
+// from inside the app and employees can log in with just the code + a
+// password, without needing to know the shop's internal id.
+const SHOPS_COL = db.collection('shops');
+const SHOP_CODES_COL = db.collection('shopCodes');
+function employeeEmailForShop(shopId){ return `employee-${shopId}@royaume-de-la-mariee.app`; }
+function generateShopCode(){
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no ambiguous O/0/I/1
+  let code = '';
+  for(let i=0;i<6;i++) code += chars[Math.floor(Math.random()*chars.length)];
+  return code;
+}
+
+// These are re-pointed to the active shop's subcollections by setActiveShop()
+// right after login, so the rest of the app (which already only reads these
+// four names) automatically works per-shop with no further changes needed.
+let DRESSES_COL, BOOKINGS_COL, BACKUPS_COL, SETTINGS_DOC;
+function setActiveShop(shopId){
+  state.shopId = shopId;
+  const shopRef = SHOPS_COL.doc(shopId);
+  DRESSES_COL = shopRef.collection('dresses');
+  BOOKINGS_COL = shopRef.collection('bookings');
+  BACKUPS_COL = shopRef.collection('backups');
+  SETTINGS_DOC = shopRef.collection('settings').doc('app');
+}
+
+// --- Legacy (pre-multi-tenant) top-level collections ----------------------
+// Kept only so the one-time "migrate my old data" tool can read the
+// original owner's data and copy it into their new per-shop space.
+const LEGACY_DRESSES_COL = db.collection('dresses');
+const LEGACY_BOOKINGS_COL = db.collection('bookings');
+const LEGACY_SETTINGS_DOC = db.collection('settings').doc('app');
 
 const COLORS = {
   'أحمر': '#C0392B', 'أزرق':'#2E5C8A', 'أخضر':'#3F6B4A', 'ذهبي':'#B8935A',
@@ -330,13 +361,14 @@ async function storageSet(key, value){
 // Saves the current dresses/bookings to localStorage so the app has something
 // to show the next time it can't reach Firestore (e.g. no internet).
 function cacheLocalData(){
+  if(!state.shopId) return;
   try{
-    localStorage.setItem('rm_cache_dresses', JSON.stringify(state.dresses));
-    localStorage.setItem('rm_cache_bookings', JSON.stringify(state.bookings));
+    localStorage.setItem(`rm_cache_dresses_${state.shopId}`, JSON.stringify(state.dresses));
+    localStorage.setItem(`rm_cache_bookings_${state.shopId}`, JSON.stringify(state.bookings));
   }catch(e){ /* storage full or unavailable, safe to ignore */ }
 }
 function readLocalCache(key){
-  try{ const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : []; }
+  try{ const raw = localStorage.getItem(`${key}_${state.shopId}`); return raw ? JSON.parse(raw) : []; }
   catch(e){ return []; }
 }
 
@@ -1724,6 +1756,20 @@ function renderReports(){
       </div>
     </form>
 
+    <div class="section-title"><h2 class="display">🔑 رمز المحل</h2><div class="dash"></div></div>
+    <div class="card">
+      <p style="font-size:13px; color:var(--ink-soft); margin-top:0;">أعطي هاد الرمز للموظفين باش يقدرو يدخلو للتطبيق (بعد ما تعينلهم كلمة سر تحت).</p>
+      <div style="font-size:28px; font-weight:700; letter-spacing:4px; text-align:center; padding:10px; background:var(--paper-2); border-radius:10px;">${esc(state.shopCode||'—')}</div>
+    </div>
+
+    <div class="section-title"><h2 class="display">📦 نقل بيانات قديمة</h2><div class="dash"></div></div>
+    <div class="card">
+      <p style="font-size:13px; color:var(--ink-soft); margin-top:0;">
+        إذا كنت خدام بالتطبيق من قبل بحساب قديم (قبل نظام المحلات المتعددة)، دوس هنا باش تجيب الفساتين والحجوزات ديالك القديمة لهاد الحساب الجديد. دير هاد الشي مرة وحدة فقط.
+      </p>
+      <div class="btn-row"><button class="btn btn-primary" type="button" onclick="migrateLegacyData()">نقل البيانات القديمة دابا</button></div>
+    </div>
+
     <div class="section-title"><h2 class="display">👤 حساب الموظف</h2><div class="dash"></div></div>
     <div class="card">
       <p style="font-size:13px; color:var(--ink-soft); margin-top:0;">
@@ -1853,9 +1899,11 @@ function showLockScreen(mode){
     root.innerHTML = `
       <div class="modal-overlay" style="z-index:100;">
         <div class="modal">
-          <div class="section-title" style="margin-top:0;"><h2 class="display">🔒 تعيين كلمة السر</h2></div>
-          <p style="font-size:13px; color:var(--ink-soft); margin-top:-6px;">هاد الكلمة غادي تلزمك باش تدخل للتطبيق فالمرات الجاية</p>
-          <form onsubmit="setupPassword(event)">
+          <div class="section-title" style="margin-top:0;"><h2 class="display">🔒 تسجيل محل جديد</h2></div>
+          <p style="font-size:13px; color:var(--ink-soft); margin-top:-6px;">دير حساب لمحلك، وستوصل بعده على رمز خاص بيه تعطيه للموظفين</p>
+          <form onsubmit="setupShopAccount(event)">
+            <div style="margin-bottom:10px;"><label>اسم المحل</label><input name="shopName" required placeholder="مثلا: Royaume de la Mariée"></div>
+            <div style="margin-bottom:10px;"><label>البريد الإلكتروني</label><input type="email" name="email" required dir="ltr" placeholder="you@example.com"></div>
             <div style="margin-bottom:10px;"><label>كلمة السر</label><input type="password" name="pw1" required minlength="6"></div>
             <div><label>أكد كلمة السر</label><input type="password" name="pw2" required minlength="6"></div>
             <div id="setup-error" style="color:#a33; font-size:13px; margin-top:8px;"></div>
@@ -1870,17 +1918,23 @@ function showLockScreen(mode){
       <div class="modal-overlay" style="z-index:100;">
         <div class="modal">
           <div class="section-title" style="margin-top:0;"><h2 class="display">🔒 Royaume de la Mariée</h2></div>
-          <p style="font-size:13px; color:var(--ink-soft); margin-top:-6px;">دخل كلمة السر باش توصل للتطبيق</p>
+          <p style="font-size:13px; color:var(--ink-soft); margin-top:-6px;">دخل بياناتك باش توصل للتطبيق</p>
           <form onsubmit="loginPassword(event)">
             <div class="btn-row" style="margin-bottom:10px;">
               <button type="button" class="btn btn-primary" id="roleOwnerBtn" onclick="setLoginRole('owner')">👑 صاحب المحل</button>
               <button type="button" class="btn btn-ghost" id="roleEmployeeBtn" onclick="setLoginRole('employee')">👤 موظف</button>
             </div>
             <input type="hidden" name="role" id="loginRoleInput" value="owner">
-            <input type="password" name="pw" required autofocus placeholder="كلمة السر">
+            <div id="ownerLoginFields">
+              <div style="margin-bottom:10px;"><label>البريد الإلكتروني</label><input type="email" name="email" dir="ltr" placeholder="you@example.com"></div>
+            </div>
+            <div id="employeeLoginFields" style="display:none;">
+              <div style="margin-bottom:10px;"><label>رمز المحل</label><input name="shopCode" dir="ltr" style="text-transform:uppercase;" maxlength="6" placeholder="مثلا RM4X7K"></div>
+            </div>
+            <div style="margin-bottom:10px;"><label>كلمة السر</label><input type="password" name="pw" required autofocus></div>
             <div id="login-error" style="color:#a33; font-size:13px; margin-top:8px;"></div>
             <div class="btn-row"><button class="btn btn-primary" type="submit">دخول</button></div>
-            <p style="font-size:12px; margin-top:12px;">أول مرة على هاد الجهاز؟ <a href="#" onclick="showLockScreen('setup'); return false;">عيّني كلمة سر</a></p>
+            <p style="font-size:12px; margin-top:12px;">عندك محل جديد؟ <a href="#" onclick="showLockScreen('setup'); return false;">سجل محل جديد</a></p>
           </form>
         </div>
       </div>
@@ -1888,20 +1942,29 @@ function showLockScreen(mode){
   }
 }
 
-// Toggles which account the login form will sign in as (owner vs employee),
-// just changes which button looks "pressed" and a hidden field the form reads.
+// Toggles which fields the login form shows (owner logs in with their real
+// email, employees log in with the shop's short code instead), and which
+// button looks "pressed".
 function setLoginRole(role){
   document.getElementById('loginRoleInput').value = role;
   const ownerBtn = document.getElementById('roleOwnerBtn');
   const empBtn = document.getElementById('roleEmployeeBtn');
+  const ownerFields = document.getElementById('ownerLoginFields');
+  const empFields = document.getElementById('employeeLoginFields');
   if(role === 'owner'){
     ownerBtn.className = 'btn btn-primary'; empBtn.className = 'btn btn-ghost';
+    ownerFields.style.display = ''; empFields.style.display = 'none';
   } else {
     empBtn.className = 'btn btn-primary'; ownerBtn.className = 'btn btn-ghost';
+    empFields.style.display = ''; ownerFields.style.display = 'none';
   }
 }
 
-async function setupPassword(e){
+// Creates a brand-new shop: a real Firebase Auth account for the owner (their
+// uid becomes the shop's id), a /shops/{shopId} document holding the shop's
+// name and its short public "shop code", and a /shopCodes/{code} lookup entry
+// so employees can find the right shop from just that code.
+async function setupShopAccount(e){
   e.preventDefault();
   const f = e.target;
   const errBox = document.getElementById('setup-error');
@@ -1910,19 +1973,31 @@ async function setupPassword(e){
     errBox.textContent = 'كلمتا السر غير متطابقتين';
     return;
   }
+  const shopName = f.shopName.value.trim();
+  if(!shopName){ errBox.textContent = 'دخل اسم المحل'; return; }
   try{
-    await auth.createUserWithEmailAndPassword(APP_LOGIN_EMAIL, f.pw1.value);
+    const cred = await auth.createUserWithEmailAndPassword(f.email.value.trim(), f.pw1.value);
+    const shopId = cred.user.uid;
+    const shopCode = generateShopCode();
+    await SHOPS_COL.doc(shopId).set({
+      shopName, shopCode, ownerEmail: f.email.value.trim(), createdAt: Date.now()
+    });
+    await SHOP_CODES_COL.doc(shopCode).set({ shopId });
+    setActiveShop(shopId);
     state.role = 'owner';
+    state.shopName = shopName;
+    state.shopCode = shopCode;
+    state.justCreatedShop = true; // shows a one-time "here's your shop code" banner
     localStorage.setItem('rm_account_created', 'true');
     await unlockApp();
   }catch(err){
     console.error('signup error', err);
     if(err.code === 'auth/email-already-in-use'){
-      state.role = 'owner';
-      localStorage.setItem('rm_account_created', 'true');
-      errBox.textContent = 'كلمة السر معينة من قبل، دخلي بيها من "سجلي الدخول"';
+      errBox.textContent = 'هاد البريد مسجل من قبل، دخلي بيه من "سجلي الدخول"';
     } else if(err.code === 'auth/weak-password'){
       errBox.textContent = 'كلمة السر ضعيفة، اختاري كلمة أطول';
+    } else if(err.code === 'auth/invalid-email'){
+      errBox.textContent = 'البريد الإلكتروني ماشي صحيح';
     } else if(err.code === 'auth/operation-not-allowed'){
       errBox.textContent = 'خدمة Email/Password ماشي مفعّلة فـ Firebase، فعّليها من Authentication → Sign-in method';
     } else if(err.code === 'auth/unauthorized-domain'){
@@ -1939,20 +2014,33 @@ async function loginPassword(e){
   const errBox = document.getElementById('login-error');
   errBox.textContent = '';
   const role = f.role.value === 'employee' ? 'employee' : 'owner';
-  const email = role === 'employee' ? EMPLOYEE_LOGIN_EMAIL : APP_LOGIN_EMAIL;
   try{
-    await auth.signInWithEmailAndPassword(email, f.pw.value);
-    state.role = role;
+    if(role === 'owner'){
+      const cred = await auth.signInWithEmailAndPassword(f.email.value.trim(), f.pw.value);
+      setActiveShop(cred.user.uid);
+      state.role = 'owner';
+    } else {
+      const code = (f.shopCode.value || '').trim().toUpperCase();
+      if(!code){ errBox.textContent = 'دخل رمز المحل'; return; }
+      const codeDoc = await SHOP_CODES_COL.doc(code).get();
+      if(!codeDoc.exists){ errBox.textContent = 'رمز المحل غير صحيح'; return; }
+      const shopId = codeDoc.data().shopId;
+      await auth.signInWithEmailAndPassword(employeeEmailForShop(shopId), f.pw.value);
+      setActiveShop(shopId);
+      state.role = 'employee';
+    }
     localStorage.setItem('rm_account_created', 'true');
     await unlockApp();
   }catch(err){
     console.error('login error', err);
     if(err.code === 'auth/user-not-found'){
       errBox.textContent = role === 'employee'
-        ? 'ما كاينش حساب موظف بعد، صاحب المحل خاصو يعينو من تبويب التقارير'
-        : 'ما كايناش كلمة سر معينة بعد، دوزي على "عيّني كلمة سر"';
+        ? 'ما كاينش حساب موظف بعد لهاد المحل، صاحب المحل خاصو يعينو من تبويب التقارير'
+        : 'ما كاينش حساب بهاد البريد';
     } else if(err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential'){
       errBox.textContent = 'كلمة السر غير صحيحة';
+    } else if(err.code === 'auth/invalid-email'){
+      errBox.textContent = 'البريد الإلكتروني ماشي صحيح';
     } else if(err.code === 'auth/operation-not-allowed'){
       errBox.textContent = 'خدمة Email/Password ماشي مفعّلة فـ Firebase، فعّليها من Authentication → Sign-in method';
     } else if(err.code === 'auth/unauthorized-domain'){
@@ -1966,6 +2054,15 @@ async function loginPassword(e){
 async function unlockApp(){
   const root = document.getElementById('lock-screen');
   root.innerHTML = `<div class="empty">جاري التحميل...</div>`;
+  if(!state.shopCode){
+    try{
+      const shopDoc = await SHOPS_COL.doc(state.shopId).get();
+      if(shopDoc.exists){
+        state.shopCode = shopDoc.data().shopCode;
+        if(!state.shopName) state.shopName = shopDoc.data().shopName;
+      }
+    }catch(e){ console.error('shop doc load error', e); }
+  }
   await loadData();
   await applySavedDarkMode();
   await applySavedNotifSetting();
@@ -1978,9 +2075,46 @@ async function unlockApp(){
   root.innerHTML = '';
   root.style.display = 'none';
   render();
+  if(state.justCreatedShop){
+    state.justCreatedShop = false;
+    alert(`تم إنشاء حساب محلك ✓\n\nرمز المحل ديالك: ${state.shopCode}\n\nأعطي هاد الرمز للموظفين باش يقدرو يدخلو للتطبيق (بعد ما تعينلهم كلمة سر من تبويب التقارير). احتفظ بيه فمكان آمن.`);
+  }
 }
 
-// Creates the employee account the first time (via the secondary Firebase
+// One-time helper: copies the pre-multi-tenant top-level dresses/bookings/
+// settings into the current shop's own nested collections, then leaves the
+// old data in place untouched (nothing is deleted automatically, so this is
+// safe to run even by mistake — running it twice just re-copies the same data).
+async function migrateLegacyData(){
+  if(!confirm('غادي نجيبو الفساتين والحجوزات القديمة لهاد الحساب. متأكد؟')) return;
+  try{
+    const [dressesSnap, bookingsSnap, settingsSnap] = await Promise.all([
+      LEGACY_DRESSES_COL.get(),
+      LEGACY_BOOKINGS_COL.get(),
+      LEGACY_SETTINGS_DOC.get()
+    ]);
+    const legacyDresses = dressesSnap.docs.map(d=>d.data());
+    const legacyBookings = bookingsSnap.docs.map(d=>d.data());
+    if(!legacyDresses.length && !legacyBookings.length){
+      alert('ما لقيتش بيانات قديمة باش تتنقل (بجوز راه سبق ونقلتيها، ولا ماكانش حساب قديم).');
+      return;
+    }
+    await Promise.all(legacyDresses.map(d=> DRESSES_COL.doc(d.id).set(d)));
+    await Promise.all(legacyBookings.map(b=> BOOKINGS_COL.doc(b.id).set(b)));
+    if(settingsSnap.exists){
+      await SETTINGS_DOC.set(settingsSnap.data(), { merge: true });
+    }
+    await loadData();
+    await applyShopSettings();
+    render();
+    alert(`تم نقل ${legacyDresses.length} فستان و ${legacyBookings.length} حجز بنجاح ✓`);
+  }catch(err){
+    console.error('migration error', err);
+    alert('تعذر نقل البيانات: ' + (err.code || err.message || ''));
+  }
+}
+
+
 // app, so the owner's own session is untouched), or updates its password if
 // it already exists (requires knowing the current employee password, as a
 // simple safeguard against anyone else changing it).
@@ -1992,7 +2126,7 @@ async function setEmployeePassword(e){
   const errBox = document.getElementById('employeePwError');
   if(errBox) errBox.textContent = '';
   try{
-    await secondaryAuth.createUserWithEmailAndPassword(EMPLOYEE_LOGIN_EMAIL, newPw);
+    await secondaryAuth.createUserWithEmailAndPassword(employeeEmailForShop(state.shopId), newPw);
     await secondaryAuth.signOut();
     showToast('تم تعيين كلمة سر الموظف لأول مرة ✓');
     f.reset();
@@ -2003,7 +2137,7 @@ async function setEmployeePassword(e){
         return;
       }
       try{
-        await secondaryAuth.signInWithEmailAndPassword(EMPLOYEE_LOGIN_EMAIL, oldPw);
+        await secondaryAuth.signInWithEmailAndPassword(employeeEmailForShop(state.shopId), oldPw);
         await secondaryAuth.currentUser.updatePassword(newPw);
         await secondaryAuth.signOut();
         showToast('تم تغيير كلمة سر الموظف ✓');
