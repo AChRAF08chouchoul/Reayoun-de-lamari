@@ -192,6 +192,7 @@
 <div id="offlineBanner" style="display:none; background:#a33; color:#fff; text-align:center; padding:8px 12px; font-size:13px; font-family:'Cairo';">
   ⚠ لا يوجد اتصال بالإنترنت — كتشوف آخر نسخة محفوظة فهاد الجهاز، والتعديلات ما غاديش تتحفظ حتى يرجع الاتصال
 </div>
+<div id="subscriptionWarningBanner" style="display:none; background:#b8860b; color:#fff; text-align:center; padding:8px 12px; font-size:13px; font-family:'Cairo';"></div>
 
 <div class="topbar">
   <div style="display:flex; justify-content:space-between; align-items:flex-start;">
@@ -2199,6 +2200,23 @@ async function unlockApp(){
   if(expired && !state.isAdmin){
     showSubscriptionLockedScreen(shopData);
     return;
+  }
+
+  // Give a heads-up a few days before the cutoff instead of only warning
+  // right when access gets blocked, so the shop owner has time to renew.
+  const WARNING_WINDOW_DAYS = 3;
+  const warningBanner = document.getElementById('subscriptionWarningBanner');
+  if(warningBanner){
+    const stillActive = shopData && shopData.subscriptionStatus !== 'suspended' && shopData.subscriptionExpiresAt;
+    const daysLeft = stillActive ? Math.ceil((shopData.subscriptionExpiresAt - now) / (24*60*60*1000)) : null;
+    if(!state.isAdmin && daysLeft !== null && daysLeft >= 0 && daysLeft <= WARNING_WINDOW_DAYS){
+      const expiryDateStr = new Date(shopData.subscriptionExpiresAt).toLocaleDateString('ar-DZ');
+      const daysLabel = daysLeft === 0 ? 'اليوم' : `${daysLeft} يوم`;
+      warningBanner.textContent = `⚠ اشتراكك غادي ينتهي ${daysLabel} (${expiryDateStr}) — للتجديد راسل: ${ADMIN_EMAIL}`;
+      warningBanner.style.display = 'block';
+    } else {
+      warningBanner.style.display = 'none';
+    }
   }
 
   await loadData();
