@@ -2144,7 +2144,7 @@ async function setupShopAccount(e){
       shopName, shopCode, ownerEmail: f.email.value.trim(), createdAt: Date.now(),
       subscriptionStatus: 'active',
       subscriptionPlan: 'trial',
-      subscriptionExpiresAt: Date.now() + (7 * 24 * 60 * 60 * 1000) // 7-day free trial
+      subscriptionExpiresAt: Date.now() + (15 * 24 * 60 * 60 * 1000) // 15-day free trial
     });
     await SHOP_CODES_COL.doc(shopCode).set({ shopId });
     setActiveShop(shopId);
