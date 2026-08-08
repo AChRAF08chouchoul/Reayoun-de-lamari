@@ -907,6 +907,18 @@ async function deleteBooking(id){
   await deleteBookingFromCloud(id);
 }
 
+// Quick "pay remainder" action for the dashboard cards: shows how much is
+// left, defaults to marking the booking fully paid, but still lets the
+// person type a different (e.g. partial) amount if that's what was actually paid.
+async function promptUpdatePayment(id){
+  const b = state.bookings.find(x=>x.id===id);
+  if(!b) return;
+  const remaining = (b.total - b.paid).toFixed(2);
+  const input = prompt(`المبلغ المتبقي حاليا: ${remaining} دج\nأدخل المبلغ الجديد المدفوع بالكامل (الكلي = ${b.total.toFixed(2)}):`, b.total.toFixed(2));
+  if(input === null) return; // cancelled
+  await updatePayment(id, input);
+}
+
 async function updatePayment(id, value){
   const b = state.bookings.find(b=>b.id===id);
   if(!b) return;
@@ -1181,7 +1193,10 @@ function renderDashboard(){
             <b>${esc(b.customer)}</b> — ${esc(bookingDressLabel(b))}
             <div class="money-line"><span class="due">متبقي: ${(b.total-b.paid).toFixed(2)} دج</span></div>
           </div>
-          <button class="btn btn-gold" onclick="openReceipt('${b.id}')">الوصل</button>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="btn btn-primary" style="padding:6px 10px; font-size:12px;" onclick="promptUpdatePayment('${b.id}')">دفع الباقي</button>
+            <button class="btn btn-gold" onclick="openReceipt('${b.id}')">الوصل</button>
+          </div>
         </div>
       `).join('')}
     </div>` : ''}
@@ -1195,6 +1210,7 @@ function renderDashboard(){
             <div class="money-line"><span class="paid">مدفوع: ${b.paid.toFixed(2)}</span><span class="due">متبقي: ${(b.total-b.paid).toFixed(2)}</span></div>
           </div>
           <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="btn btn-primary" style="padding:6px 10px; font-size:12px;" onclick="promptUpdatePayment('${b.id}')">دفع الباقي</button>
             <button class="btn btn-gold" onclick="openReceipt('${b.id}')">الوصل</button>
             ${bookingReturnButtonHTML(b)}
           </div>
